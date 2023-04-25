@@ -68,7 +68,7 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
   } else {
     temp = root_->Clone();
   }
-  std::shared_ptr<TrieNode> oldcur(root_);
+
   std::shared_ptr<TrieNode> cur(std::move(temp));
   std::shared_ptr<TrieNode> pre(nullptr);
   std::shared_ptr<TrieNode> root(cur);
