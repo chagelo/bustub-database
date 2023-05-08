@@ -78,6 +78,7 @@ void DiskManager::ShutDown() {
  * Write the contents of the specified page into disk file
  */
 void DiskManager::WritePage(page_id_t page_id, const char *page_data) {
+  // hint
   std::scoped_lock scoped_db_io_latch(db_io_latch_);
   size_t offset = static_cast<size_t>(page_id) * BUSTUB_PAGE_SIZE;
   // set write cursor to offset
