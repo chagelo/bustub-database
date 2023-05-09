@@ -213,5 +213,8 @@ class BufferPoolManager {
   // TODO(student): You may add additional private members and helper functions
   std::unordered_map<frame_id_t, page_id_t> reverse_page_table_;
   std::list<page_id_t>free_page_list_;
+  auto FlushPageWithoutGloablLatch(page_id_t page_id) -> bool;
+  // reset metadata of a page
+  void 1  (Page &page);
 };
 }  // namespace bustub
