@@ -171,6 +171,7 @@ class BufferPoolManager {
    * @return false if the page exists but could not be deleted, true if the page didn't exist or deletion succeeded
    */
   auto DeletePage(page_id_t page_id) -> bool;
+  auto UnpinPage(Page *page) -> bool;
 
  private:
   /** Number of pages in the buffer pool. */
@@ -192,8 +193,8 @@ class BufferPoolManager {
   std::list<frame_id_t> free_list_;
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
   /**
-  *  free_list_, replacer_, page_table_, disk_manager, 
-  **/
+   *  free_list_, replacer_, page_table_, disk_manager,
+   **/
   std::mutex latch_;
 
   /**
@@ -212,9 +213,8 @@ class BufferPoolManager {
 
   // TODO(student): You may add additional private members and helper functions
   std::unordered_map<frame_id_t, page_id_t> reverse_page_table_;
-  std::list<page_id_t>free_page_list_;
+  std::list<page_id_t> free_page_list_;
   auto FlushPageWithoutGloablLatch(page_id_t page_id) -> bool;
-  // reset metadata of a page
-  void 1  (Page &page);
+  // auto UnpinPage(Page *page)->bool;
 };
 }  // namespace bustub

@@ -35,7 +35,7 @@ class LRUKNode {
   frame_id_t fid_;
   bool is_evictable_{false};
   LRUKNode() = default;
-  LRUKNode(size_t timestamp, size_t fid, size_t k = 1): history_({timestamp}), k_(k), fid_(fid){}
+  LRUKNode(size_t timestamp, size_t fid, size_t k = 1) : history_({timestamp}), k_(k), fid_(fid) {}
 };
 
 /**

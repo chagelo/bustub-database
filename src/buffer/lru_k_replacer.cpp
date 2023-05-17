@@ -15,24 +15,26 @@
 
 namespace bustub {
 
-LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) { }
+LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
 
 // O(n), n equals to replacer_size_
-auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool { 
+auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   // frame_id is nullptr
   // if (frame_id != nullptr) {
   //   return false;
   // }
-  
+
   // the buffer has no element
 
+  std::lock_guard<std::mutex> lock(latch_);
+
   if (fifo_dl_.empty() && lru_dl_.empty()) {
-    return false; 
+    return false;
   }
 
   if (evictable_cnt_fifo_ > 0) {
     auto iter = fifo_dl_.rbegin();
-    while(iter != fifo_dl_.rend()) {
+    while (iter != fifo_dl_.rend()) {
       if (iter->is_evictable_) {
         if (frame_id != nullptr) {
           *frame_id = iter->fid_;
@@ -49,8 +51,8 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
 
   if (evictable_cnt_lru_ > 0) {
     auto iter = lru_dl_.rbegin();
-    
-    while(iter != lru_dl_.rend()) {
+
+    while (iter != lru_dl_.rend()) {
       if (iter->is_evictable_) {
         if (frame_id != nullptr) {
           *frame_id = iter->fid_;
@@ -71,10 +73,11 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
 
 // O(?)
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
-
-  if (static_cast<size_t>(frame_id) > replacer_size_ or frame_id < 0) {
+  if (static_cast<size_t>(frame_id) > replacer_size_ || frame_id < 0) {
     throw Exception("invalid frame_id");
   }
+
+  std::lock_guard<std::mutex> lock(latch_);
 
   // it no need to evict
   current_timestamp_++;
@@ -98,7 +101,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
         target->history_.pop_front();
       }
 
-      while(pos != lru_dl_.end()) {
+      while (pos != lru_dl_.end()) {
         if (*pos->history_.begin() < *target->history_.begin()) {
           break;
         }
@@ -106,22 +109,21 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
       }
 
       auto iter = lru_dl_.insert(pos, *target);
-      
-      if(target->k_ == k_) {
+
+      if (target->k_ == k_) {
         if (target->is_evictable_) {
           evictable_cnt_lru_++;
           evictable_cnt_fifo_--;
-        } 
+        }
         fifo_dl_.erase(target);
-      } else if(target->k_ > k_) {
+      } else if (target->k_ > k_) {
         lru_dl_.erase(target);
       }
       node_store_[frame_id] = iter;
-
     }
 
     return;
-  } 
+  }
 
   if (curr_size_ == replacer_size_) {
     Evict(nullptr);
@@ -136,6 +138,8 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
 
 // O(1)
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
+  std::lock_guard<std::mutex> lock(latch_);
+
   auto it = node_store_.find(frame_id);
 
   if (it == node_store_.end()) {
@@ -150,14 +154,16 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 
   target->is_evictable_ = set_evictable;
   if (target->k_ < k_) {
-    evictable_cnt_fifo_ += set_evictable? 1: -1;
+    evictable_cnt_fifo_ += set_evictable ? 1 : -1;
   } else {
-    evictable_cnt_lru_ += set_evictable? 1: -1;
+    evictable_cnt_lru_ += set_evictable ? 1 : -1;
   }
 }
 
 // O(1)
 void LRUKReplacer::Remove(frame_id_t frame_id) {
+  std::lock_guard<std::mutex> lock(latch_);
+
   auto it = node_store_.find(frame_id);
   if (it == node_store_.end()) {
     return;
@@ -182,8 +188,9 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
 }
 
 // O(1)
-auto LRUKReplacer::Size() -> size_t { 
-  return evictable_cnt_fifo_ + evictable_cnt_lru_; 
+auto LRUKReplacer::Size() -> size_t {
+  std::lock_guard<std::mutex> lock(latch_);
+  return evictable_cnt_fifo_ + evictable_cnt_lru_;
 }
 
 }  // namespace bustub
