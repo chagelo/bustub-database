@@ -95,4 +95,19 @@ TEST(LRUKReplacerTest, SampleTest) {
   ASSERT_EQ(false, lru_replacer.Evict(&value));
   ASSERT_EQ(0, lru_replacer.Size());
 }
+
+TEST(LRUKReplacerTest, CornerCaseTest) {
+  LRUKReplacer lru_replacer(7, 1);
+
+  int value;
+  lru_replacer.RecordAccess(2);
+  lru_replacer.RecordAccess(1);
+  lru_replacer.SetEvictable(1, true);
+  lru_replacer.SetEvictable(2, true);
+
+  lru_replacer.Evict(&value);
+
+  ASSERT_EQ(2, value);
+}
+
 }  // namespace bustub
