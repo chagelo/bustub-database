@@ -12,6 +12,7 @@
 
 #include "buffer/buffer_pool_manager.h"
 #include <cstdlib>
+#include <utility>
 
 #include "common/config.h"
 #include "common/exception.h"
@@ -94,7 +95,14 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   // find the target page by page_id
   if (page_table_.find(page_id) != page_table_.end()) {
     auto frame_id = page_table_[page_id];
+    replacer_->RecordAccess(frame_id);
+    replacer_->SetEvictable(frame_id, false);
+
+    auto &page = pages_[frame_id];
+    page.WLatch();
     latch_.unlock();
+    page.pin_count_++;
+    page.WUnlatch();
     return pages_ + frame_id;
   }
 
@@ -103,11 +111,6 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
     latch_.unlock();
     return nullptr;
   }
-
-  /*
-   *   HINT: page_id pin_count ++ and keep
-   *
-   */
 
   frame_id_t free_frame = 0;
 
@@ -152,6 +155,8 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   targ_page.page_id_ = page_id;
   targ_page.rwlatch_.WUnlock();
 
+  // when read or write, pin this page
+
   return pages_ + free_frame;
 }
 
@@ -177,10 +182,7 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   latch_.unlock();
 
   // origin page is clean, then up above do some modify
-  if (!targ_page.is_dirty_ && is_dirty) {
-    targ_page.is_dirty_ = is_dirty;
-  }
-
+  targ_page.is_dirty_ |= is_dirty;
   targ_page.WUnlatch();
   return true;
 }
@@ -223,48 +225,52 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   auto &targ_page = pages_[targ_iter->second];
 
   // bfm latch unlock after accessing the latch of the page
-  targ_page.rwlatch_.WLock();
+  targ_page.RLatch();
   latch_.unlock();
 
   // write page to disk
   disk_manager_->WritePage(page_id, targ_page.GetData());
 
   targ_page.is_dirty_ = false;
-  targ_page.rwlatch_.WUnlock();
+  targ_page.rwlatch_.RUnlock();
 
   return false;
 }
 
-auto BufferPoolManager::FlushPageWithoutGloablLatch(page_id_t page_id) -> bool {
+auto BufferPoolManager::FlushPageWithoutLatch(page_id_t page_id, frame_id_t frame_id) -> bool {
   if (page_id == INVALID_PAGE_ID) {
     return false;
   }
 
-  auto targ_iter = page_table_.find(page_id);
-  if (targ_iter == page_table_.end()) {
-    return false;
-  }
-  auto &targ_page = pages_[targ_iter->second];
-
-  // bfm latch unlock after accessing the latch of the page
-  targ_page.rwlatch_.WLock();
+  auto &targ_page = pages_[frame_id];
 
   // write page to disk
   disk_manager_->WritePage(page_id, targ_page.GetData());
 
   targ_page.is_dirty_ = false;
-  targ_page.rwlatch_.WUnlock();
-
   return false;
 }
 
-// TODO(ready to modify)
 void BufferPoolManager::FlushAllPages() {
   latch_.lock();
-  for (auto [page_id, _] : page_table_) {
-    FlushPageWithoutGloablLatch(page_id);
+
+  /*
+   * here use page_ref to store the pointer points to the page(what to write to disk)
+   * and the page_id in disk(where to write in disk),
+   * when unlock the buffer latch, another thread might modify the
+   * page_table_, so here wo store the pointer first.
+   */
+  std::vector<std::pair<page_id_t, frame_id_t>> page_ref;
+  for (auto [page_id, frame_id] : page_table_) {
+    pages_[frame_id].WLatch();
+    page_ref.emplace_back(std::make_pair(page_id, frame_id));
   }
+
   latch_.unlock();
+  for (auto [page_id, frame_id] : page_ref) {
+    FlushPageWithoutLatch(page_id, frame_id);
+    pages_[frame_id].WUnlatch();
+  }
 }
 
 auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
@@ -283,7 +289,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
 
   if (targ_page.pin_count_ > 0) {
     targ_page.rwlatch_.WUnlock();
-    latch_.lock();
+    latch_.unlock();
     return false;
   }
 
