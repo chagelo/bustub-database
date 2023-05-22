@@ -11,6 +11,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "buffer/lru_k_replacer.h"
+
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+
 #include "common/exception.h"
 
 namespace bustub {
@@ -71,7 +77,6 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   // can O(1) to evict a page?
 }
 
-// O(?)
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
   if (static_cast<size_t>(frame_id) > replacer_size_ || frame_id < 0) {
     throw Exception("invalid frame_id");
@@ -85,10 +90,8 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
 
   if (it != node_store_.end()) {
     auto &target = it->second;
+    // when access a page again and it still in fifo, do nothing, except updating access times k, and access history
     if (target->k_ + 1 < k_) {
-      fifo_dl_.push_front(*target);
-      fifo_dl_.erase(target);
-      target = fifo_dl_.begin();
       target->k_++;
       target->history_.push_back(current_timestamp_);
     } else {
@@ -125,14 +128,21 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
     return;
   }
 
-  if (curr_size_ == replacer_size_) {
-    Evict(nullptr);
-    RecordAccess(frame_id);
-    return;
-  }
+  if (k_ > 1) {
+    fifo_dl_.push_front(LRUKNode(current_timestamp_, frame_id));
+    node_store_.insert({frame_id, fifo_dl_.begin()});
+  } else {
+    auto pos = lru_dl_.begin();
 
-  fifo_dl_.push_front(LRUKNode(current_timestamp_, frame_id));
-  node_store_.insert({frame_id, fifo_dl_.begin()});
+    while (pos != lru_dl_.end()) {
+      if (*pos->history_.begin() < current_timestamp_) {
+        break;
+      }
+      pos++;
+    }
+    auto iter = lru_dl_.insert(pos, LRUKNode(current_timestamp_, frame_id));
+    node_store_[frame_id] = iter;
+  }
   curr_size_++;
 }
 
