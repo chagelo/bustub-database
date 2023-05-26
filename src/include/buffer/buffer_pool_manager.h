@@ -102,7 +102,7 @@ class BufferPoolManager {
    * @param access_type type of access to the page, only needed for leaderboard tests.
    * @return nullptr if page_id cannot be fetched, otherwise pointer to the requested page
    */
-  auto FetchPage(page_id_t page_id, AccessType access_type = AccessType::Unknown) -> Page *;
+  auto FetchPage(page_id_t page_id, AccessType access_type = AccessType::Unknown, int read = -1) -> Page *;
 
   /**
    * TODO(P1): Add implementation
@@ -195,7 +195,9 @@ class BufferPoolManager {
   /**
    *  free_list_, replacer_, page_table_, disk_manager,
    **/
+
   std::mutex latch_;
+  std::mutex *rwlatch_;
 
   /**
    * @brief Allocate a page on disk. Caller should acquire the latch before calling this function.
