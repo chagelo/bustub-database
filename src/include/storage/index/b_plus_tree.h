@@ -57,6 +57,7 @@ class Context {
 };
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
+enum class Operation { SEARCH, INSERT, DELETE };
 
 // Main class providing the API for the Interactive B+ Tree.
 INDEX_TEMPLATE_ARGUMENTS
@@ -116,6 +117,21 @@ class BPlusTree {
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *txn = nullptr);
 
+  // return the leafpage(exist many key-value pair) associated with a given key
+  auto GetLeaf(const KeyType &key, Context &ctx) -> BasicPageGuard;
+
+  /**
+   * leaf node split to two new leaf node, the key-value has inserted, 
+   * then adjust the new leaf, move the first key of the second new leaf
+   * to the parent internal node   
+  */
+  auto InsertInternal(const KeyType &key, const ValueType &value, Context &ctx);
+
+  void ReleaseLatchFromQueue(Transaction *transaction);
+  void UpdateRootPageId(page_id_t page_id);
+
+  void InsertIntoParent(BPlusTreePage *old_node, const KeyType &key, BPlusTreePage *new_node);
+
  private:
   /* Debug Routines for FREE!! */
   void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
@@ -129,6 +145,10 @@ class BPlusTree {
    * @return PrintableNode
    */
   auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
+  /* Get the right bound for spliting of the first page block */
+  auto GetBound(const int &idx, const int &size) -> std::pair<int, bool>;
+  template <typename N>
+  auto Split(N *node) -> N *;
 
   // member variable
   std::string index_name_;
@@ -137,7 +157,9 @@ class BPlusTree {
   std::vector<std::string> log;  // NOLINT
   int leaf_max_size_;
   int internal_max_size_;
-  page_id_t header_page_id_;
+  page_id_t header_page_id_, root_page_id_;
+  ReaderWriterLatch root_page_id_latch_;
+  Context ctx_;
 };
 
 /**

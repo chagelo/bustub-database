@@ -32,6 +32,9 @@ namespace bustub {
  *  --------------------------------------------------------------------------
  * | HEADER | KEY(1)+PAGE_ID(1) | KEY(2)+PAGE_ID(2) | ... | KEY(n)+PAGE_ID(n) |
  *  --------------------------------------------------------------------------
+ * 
+ * so here, for header, it store a child pointer?
+ * 
  */
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeInternalPage : public BPlusTreePage {
@@ -99,6 +102,12 @@ class BPlusTreeInternalPage : public BPlusTreePage {
     return kstr;
   }
 
+  /**
+   * given key, for internal page, search which child to find again
+  */
+  auto FindChild(const KeyType &key, const KeyComparator &keycomp) const -> ValueType;
+  // TODO(): implement
+  auto InsertInternal(const KeyType &key, const ValueType &value, const KeyComparator &keycomp) -> bool;
  private:
   // Flexible array member for page data.
   MappingType array_[0];

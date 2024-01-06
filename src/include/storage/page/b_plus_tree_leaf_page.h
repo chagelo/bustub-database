@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page_guard.h"
 
 namespace bustub {
 
@@ -83,7 +84,13 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
     return kstr;
   }
-
+  auto Exist(const KeyType& key, ValueType &value, int &index, const KeyComparator &keycomp) -> bool;
+  // 第一个大于等于 key 所对应的 index
+  auto GetIndex(const KeyType& key, const KeyComparator &keycomp) -> int;
+  auto Insert(const KeyType& key, const ValueType &value, const KeyComparator &keycomp) -> bool;
+  auto InsertVal(const KeyType& key, const ValueType &value, const KeyComparator &keycomp) -> bool;
+  auto Split(const int &n) -> BasicPageGuard;
+  // auto
  private:
   page_id_t next_page_id_;
   // Flexible array member for page data.
