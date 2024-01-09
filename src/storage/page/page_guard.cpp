@@ -1,5 +1,6 @@
 #include "storage/page/page_guard.h"
 #include "buffer/buffer_pool_manager.h"
+#include "common/config.h"
 
 namespace bustub {
 
@@ -14,24 +15,33 @@ BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
 }
 
 void BasicPageGuard::Drop() {
-  if (page_ != nullptr) {
-    auto page_id = page_->GetPageId();
-    bpm_->UnpinPage(page_id, is_dirty_);
-    page_ = nullptr;
-    is_dirty_ = false;
-    bpm_ = nullptr;
+  if (page_ == nullptr) {
+    return;
   }
+
+  auto page_id = page_->GetPageId();
+  if (page_id != INVALID_PAGE_ID) {
+    bpm_->UnpinPage(page_id, is_dirty_);
+  }
+
+  page_ = nullptr;
+  is_dirty_ = false;
+  bpm_ = nullptr;
 }
 
 auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & {
-  if (page_ != nullptr) {
-    auto page_id = page_->GetPageId();
-    bpm_->UnpinPage(page_id, is_dirty_);
+  if (this == &that) {
+    return *this;
   }
+
+  // drop the current guarded page
+  Drop();
+
   page_ = that.page_;
   is_dirty_ = that.is_dirty_;
   bpm_ = that.bpm_;
 
+  // distroy the old page guard
   that.page_ = nullptr;
   that.bpm_ = nullptr;
   that.is_dirty_ = false;
@@ -46,22 +56,27 @@ BasicPageGuard::~BasicPageGuard() {  // NOLINT
 ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept { guard_ = std::move(that.guard_); }
 
 auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & {
-  auto old_page = guard_.page_;
-  auto old_page_id = old_page->GetPageId();
-  auto new_page_id = that.PageId();
-  guard_ = std::move(that.guard_);
-  if (old_page != nullptr && old_page_id != new_page_id) {
-    old_page->RUnlatch();
+  if (this == &that) {
+    return *this;
   }
+
+  if (guard_.page_ != nullptr) {
+    guard_.page_->RUnlatch();
+  }
+
+  // move, whatever the old page guard is null or not
+  guard_ = std::move(that.guard_);
+
   return *this;
 }
 
 void ReadPageGuard::Drop() {
-  auto page = guard_.page_;
-  guard_.Drop();
-  if (page != nullptr) {
-    page->RUnlatch();
+  if (guard_.page_ == nullptr) {
+    return;
   }
+
+  guard_.page_->RUnlatch();
+  guard_.Drop();
 }
 
 ReadPageGuard::~ReadPageGuard() { Drop(); }  // NOLINT
@@ -69,22 +84,27 @@ ReadPageGuard::~ReadPageGuard() { Drop(); }  // NOLINT
 WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept { guard_ = std::move(that.guard_); }
 
 auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & {
-  auto old_page = guard_.page_;
-  auto old_page_id = old_page->GetPageId();
-  auto new_page_id = that.PageId();
-  guard_ = std::move(that.guard_);
-  if (old_page != nullptr && old_page_id != new_page_id) {
-    old_page->WUnlatch();
+  if (this == &that) {
+    return *this;
   }
+
+  if (guard_.page_ != nullptr) {
+    guard_.page_->WUnlatch();
+  }
+
+  // move, whatever the old page guard is null or not
+  guard_ = std::move(that.guard_);
+
   return *this;
 }
 
 void WritePageGuard::Drop() {
-  auto page = guard_.page_;
-  guard_.Drop();
-  if (page != nullptr) {
-    page->WUnlatch();
+  if (guard_.page_ == nullptr) {
+    return ;
   }
+
+  guard_.page_->WUnlatch();
+  guard_.Drop();
 }
 
 WritePageGuard::~WritePageGuard() { Drop(); }  // NOLINT
