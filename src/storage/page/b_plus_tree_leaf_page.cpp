@@ -9,11 +9,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
 #include <sstream>
 
 #include "common/exception.h"
 #include "common/rid.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
+#include "storage/page/b_plus_tree_page.h"
 
 namespace bustub {
 
@@ -47,32 +49,33 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_pa
  * array offset)
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
-  return array_[index].first;
-}
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType { return array_[index].first; }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::Exist(const KeyType& key, ValueType &value, int &index, const KeyComparator &keycomp) -> bool {
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Exist(const KeyType &key, ValueType &value, int &index, const KeyComparator &keycomp)
+    -> bool {
   int target_in_array = GetIndex(key, keycomp);
+
   if (target_in_array == GetSize() || keycomp(array_[target_in_array].first, key) != 0) {
+    index = target_in_array;
     return false;
   }
-  value = array_[target_in_array].second;
+
   index = target_in_array;
+  value = array_[target_in_array].second;
   return true;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetIndex(const KeyType& key, const KeyComparator &keycomp) -> int {
-  auto target = std::lower_bound(array_ + 1, array_ + GetSize(), key, [&keycomp](const auto &pair, auto k) {
-    return keycomp(pair.first, k) < 0;
-  });
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetIndex(const KeyType &key, const KeyComparator &keycomp) -> int {
+  auto target = std::lower_bound(array_, array_ + GetSize(), key,
+                                 [&keycomp](const auto &pair, auto k) { return keycomp(pair.first, k) < 0; });
   return std::distance(array_, target);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType& key, const ValueType &value, const KeyComparator &keycomp) -> bool {
-
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &keycomp)
+    -> bool {
   if (GetSize() == GetMaxSize()) {
     return false;
   }
@@ -94,6 +97,31 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType& key, const ValueType &val
   std::move_backward(array_ + index, array_ + GetSize(), array_ + GetSize() + 1);
   *(array_ + index) = {key, value};
   return true;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *right_page, const int &st) {
+  right_page->CopyHalf(array_ + st, GetSize() - st);
+  SetSize(st);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyHalf(MappingType *src_array, const int &n) {
+  std::copy(src_array, src_array + n, array_);
+  SetSize(n);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetBound(const int &idx, const int &size, bool &insert_left) -> int {
+  int bound = idx;
+  if (idx <= (size - 1) / 2) {
+    bound = (size - 1) / 2;
+    insert_left = true;
+  } else {
+    bound = (size + 1) / 2;
+    insert_left = false;
+  }
+  return bound;
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;

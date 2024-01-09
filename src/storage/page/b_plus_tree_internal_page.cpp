@@ -13,9 +13,12 @@
 #include <iterator>
 #include <sstream>
 
+#include "buffer/buffer_pool_manager.h"
+#include "common/config.h"
 #include "common/exception.h"
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page_guard.h"
 
 namespace bustub {
 /*****************************************************************************
@@ -49,9 +52,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const ->
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) { 
-  array_[index].first = key;
-}
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) { array_[index].first = key; }
 
 /*
  * Helper method to get the value associated with input "index"(a.k.a array
@@ -60,10 +61,38 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType { return array_[index].second; }
 
-// TODO(not implement)
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertInternal(const KeyType &key, const ValueType &value, const KeyComparator &keycomp) -> bool {
-  return false;
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertIndex(const KeyType &key, const KeyComparator &keycomp, bool isRoot) -> int {
+  int err = static_cast<int>(isRoot);
+  auto target = std::lower_bound(array_ + err, array_ + GetSize(), key,
+                                 [&keycomp](const auto &pair, auto k) { return keycomp(pair.first, k) < 0; });
+  return std::distance(array_, target);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(const KeyType &key, const page_id_t &page_id, const KeyComparator &keycomp,
+                                            bool isRoot) -> bool {
+  if (GetSize() == GetMaxSize()) {
+    return false;
+  }
+
+  auto index = InsertIndex(key, keycomp, isRoot);
+
+  if (index == GetSize()) {
+    IncreaseSize(1);
+    *(array_ + index) = {key, page_id};
+    return true;
+  }
+
+  // repeat key do nothing
+  if (keycomp(array_[index].first, key) == 0) {
+    return false;
+  }
+
+  IncreaseSize(1);
+  std::move_backward(array_ + index, array_ + GetSize(), array_ + GetSize() + 1);
+  *(array_ + index) = {key, page_id};
+  return true;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -71,7 +100,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComp
   auto target = std::lower_bound(array_ + 1, array_ + GetSize(), key,
                                  [&keycomp](const auto &pair, auto k) { return keycomp(pair.first, k) < 0; });
 
-  // 所有的 key 都比 target 小是不可能的，因为搜索是递归进行的  
+  // 所有的 key 都比 target 小是不可能的，因为搜索是递归进行的
   // the key large than all key in this internal node, just return the last page
   if (target == array_ + GetSize()) {
     return ValueAt(GetSize() - 1);
@@ -82,8 +111,41 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComp
     return target->second;
   }
 
-  // current key less than the target                        
+  // target large than the key
   return std::prev(target)->second;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *right_page, const int &st) {
+  right_page->CopyHalf(array_ + st, GetSize() - st);
+  SetSize(st);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyHalf(MappingType *src_array, const int &n) {
+  std::copy(src_array, src_array + n, array_);
+  SetSize(n);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::RootInit(const page_id_t &page_id_1, const KeyType &key,
+                                              const page_id_t &page_id_2) {
+  *array_ = {KeyType(), page_id_1};
+  *(array_ + 1) = {key, page_id_2};
+  SetSize(2);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetBound(const int &idx, const int &size, bool &insert_left) -> int {
+  int bound = idx;
+  if (idx <= size / 2) {
+    bound = size / 2;
+    insert_left = true;
+  } else {
+    bound = size / 2 + 1;
+    insert_left = false;
+  }
+  return bound;
 }
 
 // valuetype for internalNode should be page id_t

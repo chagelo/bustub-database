@@ -18,6 +18,7 @@
 #include <shared_mutex>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -118,20 +119,20 @@ class BPlusTree {
   void RemoveFromFile(const std::string &file_name, Transaction *txn = nullptr);
 
   // return the leafpage(exist many key-value pair) associated with a given key
-  auto GetLeaf(const KeyType &key, Context &ctx) -> BasicPageGuard;
+  auto GetLeaf(const KeyType &key) -> BasicPageGuard;
 
-  /**
-   * leaf node split to two new leaf node, the key-value has inserted, 
-   * then adjust the new leaf, move the first key of the second new leaf
-   * to the parent internal node   
-  */
-  auto InsertInternal(const KeyType &key, const ValueType &value, Context &ctx);
+  // store the page in the search path
+  void GetLeafAndUpdate(const KeyType &key);
+
+  auto InsertInternal(KeyType key, page_id_t page_id) -> bool;
 
   void ReleaseLatchFromQueue(Transaction *transaction);
-  void UpdateRootPageId(page_id_t page_id);
 
-  void InsertIntoParent(BPlusTreePage *old_node, const KeyType &key, BPlusTreePage *new_node);
+  void NewRootPage(const KeyType &key, const ValueType &value);
 
+  void FetchHeaderWrite();
+
+  void ReleaseHeader();
  private:
   /* Debug Routines for FREE!! */
   void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
@@ -145,10 +146,13 @@ class BPlusTree {
    * @return PrintableNode
    */
   auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
+  
   /* Get the right bound for spliting of the first page block */
-  auto GetBound(const int &idx, const int &size) -> std::pair<int, bool>;
+  auto GetBound(const int &idx, const int &size, bool &insert_left) -> int;
+
+  // split the page to two new page
   template <typename N>
-  auto Split(N *node) -> N *;
+  auto Split(N *node, const int &right_start, page_id_t *page_id) -> N*;
 
   // member variable
   std::string index_name_;

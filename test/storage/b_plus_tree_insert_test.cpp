@@ -11,12 +11,14 @@
 //===----------------------------------------------------------------------===//
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 
 #include "buffer/buffer_pool_manager.h"
 #include "gtest/gtest.h"
 #include "storage/disk/disk_manager_memory.h"
 #include "storage/index/b_plus_tree.h"
+#include "storage/page/b_plus_tree_page.h"
 #include "test_util.h"  // NOLINT
 
 namespace bustub {
@@ -86,6 +88,8 @@ TEST(BPlusTreeTests, DISABLED_InsertTest2) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid, transaction);
   }
+
+  // std::cout << tree.DrawBPlusTree() << std::endl;
 
   std::vector<RID> rids;
   for (auto key : keys) {
@@ -184,4 +188,47 @@ TEST(BPlusTreeTests, DISABLED_InsertTest3) {
   delete transaction;
   delete bpm;
 }
+
+TEST(BPlusTreeTests, InsertCustomTest1) {
+  // create KeyComparator and index schema
+  auto key_schema = ParseCreateStatement("a bigint");
+  GenericComparator<8> comparator(key_schema.get());
+
+  auto disk_manager = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto *bpm = new BufferPoolManager(50, disk_manager.get());
+  // create and fetch header_page
+  page_id_t page_id;
+  auto header_page = bpm->NewPage(&page_id);
+  ASSERT_EQ(page_id, HEADER_PAGE_ID);
+  // create b+ tree
+  BPlusTree<GenericKey<8>, RID, GenericComparator<8>> tree("foo_pk", header_page->GetPageId(), bpm, comparator, 3, 4);
+  GenericKey<8> index_key;
+  RID rid;
+  // create transaction
+  auto *transaction = new Transaction(0);
+
+  // std::vector<int64_t> a{1, 3, 5, 7, 9, 10};
+  std::vector<int64_t> a{1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 18, 19, 20};
+  std::vector<RID> rids;
+  for (auto &key : a) {
+    rids.clear();
+    int64_t value = key & 0xFFFFFFFF;
+    rid.Set(static_cast<int32_t>(key), value);
+    index_key.SetFromInteger(key);
+    tree.Insert(index_key, rid, transaction);
+    std::cout << tree.DrawBPlusTree() << std::endl;
+  }
+
+  for (auto x : a) {
+    rids.clear();
+    index_key.SetFromInteger(x);
+    tree.GetValue(index_key, &rids);
+  }
+
+  bpm->UnpinPage(HEADER_PAGE_ID, false);
+
+  delete transaction;
+  delete bpm;
+}
+
 }  // namespace bustub

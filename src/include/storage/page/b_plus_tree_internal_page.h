@@ -13,7 +13,10 @@
 #include <queue>
 #include <string>
 
+#include "buffer/buffer_pool_manager.h"
+#include "common/config.h"
 #include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page_guard.h"
 
 namespace bustub {
 
@@ -32,9 +35,9 @@ namespace bustub {
  *  --------------------------------------------------------------------------
  * | HEADER | KEY(1)+PAGE_ID(1) | KEY(2)+PAGE_ID(2) | ... | KEY(n)+PAGE_ID(n) |
  *  --------------------------------------------------------------------------
- * 
+ *
  * so here, for header, it store a child pointer?
- * 
+ *
  */
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeInternalPage : public BPlusTreePage {
@@ -102,12 +105,26 @@ class BPlusTreeInternalPage : public BPlusTreePage {
     return kstr;
   }
 
+  // root insert, start at index 1, otherwise index 0
+  auto InsertIndex(const KeyType &key, const KeyComparator &keycomp, bool isRoot) -> int;
+
   /**
    * given key, for internal page, search which child to find again
-  */
+   */
   auto FindChild(const KeyType &key, const KeyComparator &keycomp) const -> ValueType;
-  // TODO(): implement
-  auto InsertInternal(const KeyType &key, const ValueType &value, const KeyComparator &keycomp) -> bool;
+
+  auto Insert(const KeyType &key, const page_id_t &page_id, const KeyComparator &keycomp, bool isRoot) -> bool;
+
+  void MoveHalfTo(BPlusTreeInternalPage *right_page, const int &st);
+
+  // copy array_ to dest_array from index st to ed
+  void CopyHalf(MappingType *src_array, const int &n);
+
+  // create new root, then initialize
+  void RootInit(const page_id_t &page_id_1, const KeyType &key, const page_id_t &page_id_2);
+
+    /* Get the right bound for spliting of the first page block */
+  auto GetBound(const int &idx, const int &size, bool &insert_left) -> int;
  private:
   // Flexible array member for page data.
   MappingType array_[0];

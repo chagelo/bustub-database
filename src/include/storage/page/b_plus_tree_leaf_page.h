@@ -84,13 +84,21 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
     return kstr;
   }
-  auto Exist(const KeyType& key, ValueType &value, int &index, const KeyComparator &keycomp) -> bool;
+  auto Exist(const KeyType &key, ValueType &value, int &index, const KeyComparator &keycomp) -> bool;
+  
   // 第一个大于等于 key 所对应的 index
-  auto GetIndex(const KeyType& key, const KeyComparator &keycomp) -> int;
-  auto Insert(const KeyType& key, const ValueType &value, const KeyComparator &keycomp) -> bool;
-  auto InsertVal(const KeyType& key, const ValueType &value, const KeyComparator &keycomp) -> bool;
-  auto Split(const int &n) -> BasicPageGuard;
-  // auto
+  auto GetIndex(const KeyType &key, const KeyComparator &keycomp) -> int;
+  
+  auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &keycomp) -> bool;
+
+  void MoveHalfTo(BPlusTreeLeafPage *right_page, const int &st);
+
+  // copy array_ to dest_array from index st to ed
+  void CopyHalf(MappingType *src_array, const int &n);
+
+  /* Get the right bound for spliting of the first page block */
+  auto GetBound(const int &idx, const int &size, bool &insert_left) -> int;
+
  private:
   page_id_t next_page_id_;
   // Flexible array member for page data.
