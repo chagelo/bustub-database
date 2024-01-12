@@ -8,6 +8,7 @@
 #include "common/macros.h"
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page_guard.h"
 
 namespace bustub {
 
@@ -15,27 +16,24 @@ namespace bustub {
  * NOTE: you can change the destructor/constructor method here
  * set your own input parameters
  */
-INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, const page_id_t &cur_page_id)
-    : bpm_(bpm), cur_page_id_(cur_page_id), index_(0) {}
 
 INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE::~IndexIterator() { bpm_ = nullptr; };
+INDEXITERATOR_TYPE::IndexIterator() : bpm_(nullptr), cur_page_id_(INVALID_PAGE_ID), index_(-1) {}
 
 INDEX_TEMPLATE_ARGUMENTS
-auto INDEXITERATOR_TYPE::IsEnd() -> bool {
-  BUSTUB_ASSERT(cur_page_id_ != INVALID_PAGE_ID, "current page id is INVALID_PAGE_ID");
-
-  auto cur_page_guard = bpm_->FetchPageRead(cur_page_id_);
-  auto cur_page = cur_page_guard.As<LeafPage>();
-
-  if (cur_page->GetNextPageId() == INVALID_PAGE_ID && index_ >= cur_page->GetMaxSize()) {
-    index_ = cur_page->GetMaxSize();
-    return true;
-  }
-
-  return false;
+INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, page_id_t cur_page_id, int index)
+    : bpm_(bpm), cur_page_id_(cur_page_id), index_(index) {
+  cur_guard_ = bpm_->FetchPageRead(cur_page_id);
 }
+
+INDEX_TEMPLATE_ARGUMENTS
+INDEXITERATOR_TYPE::~IndexIterator() {
+  bpm_ = nullptr;
+  cur_guard_.Drop();
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto INDEXITERATOR_TYPE::IsEnd() -> bool { return cur_page_id_ == INVALID_PAGE_ID || index_ == -1; }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator*() -> const MappingType & {
@@ -49,21 +47,22 @@ auto INDEXITERATOR_TYPE::operator*() -> const MappingType & {
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
-  BUSTUB_ASSERT(cur_page_id_ != INVALID_PAGE_ID, "current page id is INVALID_PAGE_ID");
+  if (cur_page_id_ == INVALID_PAGE_ID || index_ == -1) {
+    return *this;
+  }
 
-  auto cur_page_guard = bpm_->FetchPageRead(cur_page_id_);
-  auto cur_page = cur_page_guard.As<LeafPage>();
+  auto cur_page = cur_guard_.As<LeafPage>();
 
   // current iterator is already point to end;
-  if (cur_page->GetNextPageId() == INVALID_PAGE_ID) {
-    index_ = std::min(index_ + 1, cur_page->GetMaxSize());
-  } else {
-    if (index_ == cur_page->GetMaxSize() - 1) {  // the last element in the middle page
-      index_ = 0;
-      pre_page_id_ = cur_page_id_;
-      cur_page_id_ = cur_page->GetNextPageId();
+  if (++index_ >= cur_page->GetSize()) {
+    if (cur_page->GetNextPageId() == INVALID_PAGE_ID) {
+      index_ = -1;
+      cur_page_id_ = INVALID_PAGE_ID;
+      cur_guard_.Drop();
     } else {
-      index_++;
+      index_ = 0;
+      cur_page_id_ = cur_page->GetNextPageId();
+      cur_guard_ = bpm_->FetchPageRead(cur_page_id_);
     }
   }
   return *this;
@@ -75,7 +74,9 @@ auto INDEXITERATOR_TYPE::operator==(const IndexIterator &itr) const -> bool {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto INDEXITERATOR_TYPE::operator!=(const IndexIterator &itr) const -> bool { return *this == itr; }
+auto INDEXITERATOR_TYPE::operator!=(const IndexIterator &itr) const -> bool {
+  return !(cur_page_id_ == itr.cur_page_id_ && index_ == itr.index_);
+}
 
 template class IndexIterator<GenericKey<4>, RID, GenericComparator<4>>;
 

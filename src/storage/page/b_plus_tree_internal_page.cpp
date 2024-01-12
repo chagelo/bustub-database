@@ -9,6 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
 #include <iostream>
 #include <iterator>
 #include <sstream>
@@ -96,35 +97,47 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(const KeyType &key, const page_id_t 
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComparator &keycomp) const -> ValueType {
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, int *idx, const KeyComparator &keycomp) const
+    -> ValueType {
   auto target = std::lower_bound(array_ + 1, array_ + GetSize(), key,
                                  [&keycomp](const auto &pair, auto k) { return keycomp(pair.first, k) < 0; });
 
   // 所有的 key 都比 target 小是不可能的，因为搜索是递归进行的
   // the key large than all key in this internal node, just return the last page
   if (target == array_ + GetSize()) {
+    *idx = GetSize() - 1;
     return ValueAt(GetSize() - 1);
   }
 
   // given key is the minimum element int the subtreee
   if (keycomp(target->first, key) == 0) {
+    *idx = std::distance(array_, target);
     return target->second;
   }
 
   // target large than the key
+  *idx = std::distance(array_, target) - 1;
   return std::prev(target)->second;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *right_page, const int &st) {
-  right_page->CopyHalf(array_ + st, GetSize() - st);
-  SetSize(st);
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *right_page, const int &st, const int &des_st,
+                                                const int &n) {
+  right_page->CopyHalf(array_ + st, n, des_st);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyHalf(MappingType *src_array, const int &n) {
-  std::copy(src_array, src_array + n, array_);
-  SetSize(n);
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyHalf(MappingType *src_array, const int &n, const int &des_st) {
+  std::copy(src_array, src_array + n, array_ + des_st);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Move(const int &st, const int &direc) {
+  if (direc == 1) {  // [....] -> [...|...]
+    std::copy_backward(array_, array_ + GetSize(), array_ + st);
+  } else {  // [...|...] <- [....]
+    std::copy(array_ + GetSize() - st, array_ + GetSize(), array_);
+  }
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -146,6 +159,12 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetBound(const int &idx, const int &size, b
     insert_left = false;
   }
   return bound;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::RemoveAt(const int &idx) {
+  std::copy(array_ + idx + 1, array_ + GetSize(), array_ + idx);
+  IncreaseSize(-1);
 }
 
 // valuetype for internalNode should be page id_t

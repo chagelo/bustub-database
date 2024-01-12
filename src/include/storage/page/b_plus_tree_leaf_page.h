@@ -59,6 +59,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto GetNextPageId() const -> page_id_t;
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
+  auto ValueAt(int index) const -> const MappingType &;
 
   /**
    * @brief for test only return a string representing all keys in
@@ -84,20 +85,18 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
     return kstr;
   }
-  auto Exist(const KeyType &key, ValueType &value, int &index, const KeyComparator &keycomp) -> bool;
-  
-  // 第一个大于等于 key 所对应的 index
-  auto GetIndex(const KeyType &key, const KeyComparator &keycomp) -> int;
-  
+  auto Exist(const KeyType &key, ValueType &value, int *index, const KeyComparator &keycomp) const -> bool;
+  // return the index which the correspond key larger or equal than the given key
+  auto GetIndex(const KeyType &key, const KeyComparator &keycomp) const -> int;
   auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &keycomp) -> bool;
-
-  void MoveHalfTo(BPlusTreeLeafPage *right_page, const int &st);
-
+  void MoveHalfTo(BPlusTreeLeafPage *right_page, const int &st, const int &des_st, const int &n);
+  void Move(const int &st, const int &direc);
   // copy array_ to dest_array from index st to ed
-  void CopyHalf(MappingType *src_array, const int &n);
-
-  /* Get the right bound for spliting of the first page block */
+  void CopyHalf(MappingType *src_array, const int &n, const int &des_st);
+  // Get the right bound for spliting of the first page block
   auto GetBound(const int &idx, const int &size, bool &insert_left) -> int;
+  // remove the element from the page
+  void RemoveAt(const int &idx);
 
  private:
   page_id_t next_page_id_;

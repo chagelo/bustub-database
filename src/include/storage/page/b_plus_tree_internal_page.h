@@ -108,23 +108,27 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   // root insert, start at index 1, otherwise index 0
   auto InsertIndex(const KeyType &key, const KeyComparator &keycomp, bool isRoot) -> int;
 
-  /**
-   * given key, for internal page, search which child to find again
-   */
-  auto FindChild(const KeyType &key, const KeyComparator &keycomp) const -> ValueType;
+  // given key, for internal page, search which child to find again
+  auto FindChild(const KeyType &key, int *idx, const KeyComparator &keycomp) const -> ValueType;
 
   auto Insert(const KeyType &key, const page_id_t &page_id, const KeyComparator &keycomp, bool isRoot) -> bool;
 
-  void MoveHalfTo(BPlusTreeInternalPage *right_page, const int &st);
+  void MoveHalfTo(BPlusTreeInternalPage *right_page, const int &st, const int &des_st, const int &n);
+
+  void Move(const int &st, const int &direc);
 
   // copy array_ to dest_array from index st to ed
-  void CopyHalf(MappingType *src_array, const int &n);
+  void CopyHalf(MappingType *src_array, const int &n, const int &des_st);
 
   // create new root, then initialize
   void RootInit(const page_id_t &page_id_1, const KeyType &key, const page_id_t &page_id_2);
 
-    /* Get the right bound for spliting of the first page block */
+  // Get the right bound for spliting of the first page block */
   auto GetBound(const int &idx, const int &size, bool &insert_left) -> int;
+
+  // remove the element from the page
+  void RemoveAt(const int &idx);
+
  private:
   // Flexible array member for page data.
   MappingType array_[0];

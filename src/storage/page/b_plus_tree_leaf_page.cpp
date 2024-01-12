@@ -52,22 +52,25 @@ INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType { return array_[index].first; }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::Exist(const KeyType &key, ValueType &value, int &index, const KeyComparator &keycomp)
-    -> bool {
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> const MappingType & { return array_[index]; }
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Exist(const KeyType &key, ValueType &value, int *index,
+                                       const KeyComparator &keycomp) const -> bool {
   int target_in_array = GetIndex(key, keycomp);
 
   if (target_in_array == GetSize() || keycomp(array_[target_in_array].first, key) != 0) {
-    index = target_in_array;
+    *index = target_in_array;
     return false;
   }
 
-  index = target_in_array;
+  *index = target_in_array;
   value = array_[target_in_array].second;
   return true;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetIndex(const KeyType &key, const KeyComparator &keycomp) -> int {
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetIndex(const KeyType &key, const KeyComparator &keycomp) const -> int {
   auto target = std::lower_bound(array_, array_ + GetSize(), key,
                                  [&keycomp](const auto &pair, auto k) { return keycomp(pair.first, k) < 0; });
   return std::distance(array_, target);
@@ -100,15 +103,23 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &val
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *right_page, const int &st) {
-  right_page->CopyHalf(array_ + st, GetSize() - st);
-  SetSize(st);
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *right_page, const int &st, const int &des_st,
+                                            const int &n) {
+  right_page->CopyHalf(array_ + st, n, des_st);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyHalf(MappingType *src_array, const int &n) {
-  std::copy(src_array, src_array + n, array_);
-  SetSize(n);
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyHalf(MappingType *src_array, const int &n, const int &des_st) {
+  std::copy(src_array, src_array + n, array_ + des_st);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Move(const int &st, const int &direc) {
+  if (direc == 1) {  // [....] -> [...|...]
+    std::copy_backward(array_, array_ + GetSize(), array_ + st);
+  } else {  // [...|...] <- [....]
+    std::copy(array_ + st, array_ + GetSize(), array_ + 2 * st - GetSize());
+  }
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -122,6 +133,12 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetBound(const int &idx, const int &size, bool 
     insert_left = false;
   }
   return bound;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAt(const int &idx) {
+  std::copy(array_ + idx + 1, array_ + GetSize(), array_ + idx);
+  IncreaseSize(-1);
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;

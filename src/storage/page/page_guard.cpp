@@ -100,7 +100,7 @@ auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard
 
 void WritePageGuard::Drop() {
   if (guard_.page_ == nullptr) {
-    return ;
+    return;
   }
 
   guard_.page_->WUnlatch();

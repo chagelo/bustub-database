@@ -18,6 +18,7 @@
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 #include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page_guard.h"
 
 namespace bustub {
 
@@ -29,7 +30,7 @@ class IndexIterator {
 
  public:
   IndexIterator();
-  IndexIterator(BufferPoolManager *bpm, const page_id_t &cur_page_id);
+  IndexIterator(BufferPoolManager *bpm, page_id_t cur_page_id, int index);
   ~IndexIterator();  // NOLINT
 
   auto IsEnd() -> bool;
@@ -44,11 +45,9 @@ class IndexIterator {
 
  private:
   BufferPoolManager *bpm_;
-  // current pointerd page and the IndexIterator stored page
-  // (maybe store this IndexIterator in global page is useless)
-  page_id_t cur_page_id_, page_id_ [[maybe_unused]], pre_page_id_ [[maybe_unused]];
+  page_id_t cur_page_id_;
   int index_;
-  bool is_end_;
+  ReadPageGuard cur_guard_{};
 };
 
 }  // namespace bustub

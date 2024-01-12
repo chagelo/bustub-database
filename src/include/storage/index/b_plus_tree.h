@@ -15,10 +15,12 @@
 #include <iostream>
 #include <optional>
 #include <queue>
+#include <set>
 #include <shared_mutex>
 #include <string>
-#include <vector>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -118,21 +120,41 @@ class BPlusTree {
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *txn = nullptr);
 
+  /* help function */
   // return the leafpage(exist many key-value pair) associated with a given key
-  auto GetLeaf(const KeyType &key) -> BasicPageGuard;
+  auto GetLeaf(Context &ctx, const KeyType &key) -> ReadPageGuard;
 
   // store the page in the search path
-  void GetLeafAndUpdate(const KeyType &key);
+  void GetLeafAndUpdate(Context &ctx, const KeyType &key, std::unordered_map<page_id_t, int> *pos);
 
-  auto InsertInternal(KeyType key, page_id_t page_id) -> bool;
+  auto InsertInternal(Context &ctx, KeyType key, page_id_t page_id) -> bool;
 
   void ReleaseLatchFromQueue(Transaction *transaction);
 
-  void NewRootPage(const KeyType &key, const ValueType &value);
+  void NewRootPage(Context &ctx, const KeyType &key, const ValueType &value);
 
-  void FetchHeaderWrite();
+  void FetchHeaderWrite(Context &ctx);
 
-  void ReleaseHeader();
+  void ReleaseHeader(Context &ctx);
+
+  // below remove help functions
+  void RemoveLeaf(Context &ctx, std::unordered_map<page_id_t, int> &pos);
+
+  /**
+   * @brief Iterate to remove the kv pair in the internal page
+   *
+   * @param pos store the index of the page'page_id in the parent array_
+   * @param del_index when merge two page, we need two delete the right page's index, assume
+   * we always merge right page to left page
+   * @param new_key sometimes, after delete the left page is null, this time we need to
+   * change the index Key of the left page in the parent array_
+   * @return PrintableNode
+   */
+
+  void RemoveInternal(Context &ctx, std::unordered_map<page_id_t, int> &pos, int del_index, KeyType new_key);
+
+  void RemoveRoot(Context &ctx, const page_id_t &page_id);
+
  private:
   /* Debug Routines for FREE!! */
   void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
@@ -146,13 +168,13 @@ class BPlusTree {
    * @return PrintableNode
    */
   auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
-  
+
   /* Get the right bound for spliting of the first page block */
   auto GetBound(const int &idx, const int &size, bool &insert_left) -> int;
 
   // split the page to two new page
   template <typename N>
-  auto Split(N *node, const int &right_start, page_id_t *page_id) -> N*;
+  auto Split(N *cur_page, const int &right_start, page_id_t *page_id) -> N *;
 
   // member variable
   std::string index_name_;
@@ -163,7 +185,7 @@ class BPlusTree {
   int internal_max_size_;
   page_id_t header_page_id_, root_page_id_;
   ReaderWriterLatch root_page_id_latch_;
-  Context ctx_;
+  // Context ctx_;
 };
 
 /**
