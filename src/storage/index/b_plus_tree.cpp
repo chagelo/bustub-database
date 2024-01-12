@@ -1,4 +1,3 @@
-#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -38,9 +37,7 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { 
-  return root_page_id_ == INVALID_PAGE_ID; 
-}
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_PAGE_ID; }
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -66,14 +63,14 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   auto existed = leaf_node->Exist(key, val, &idx, comparator_);
 
   if (!existed) {
-    root_page_id_latch_.RUnlock();
-    ReleaseHeader(ctx);
+    // root_page_id_latch_.RUnlock();
+    // ReleaseHeader(ctx);
     return false;
   }
 
   result->push_back(val);
-  ReleaseHeader(ctx);
-  root_page_id_latch_.RUnlock();
+  // root_page_id_latch_.RUnlock();
+  // ReleaseHeader(ctx);
   return true;
 }
 
@@ -92,8 +89,11 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   Context ctx;
   FetchHeaderWrite(ctx);
 
+  root_page_id_latch_.WLock();
+  ctx.root_page_id_ = root_page_id_;
   if (IsEmpty()) {
     NewRootPage(ctx, key, value);
+    root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
     return true;
   }
@@ -108,6 +108,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   int idx;
   if (cur_page->Exist(key, temp, &idx, comparator_)) {
     ctx.write_set_.clear();
+    root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
     return false;
   }
@@ -116,6 +117,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   if (cur_page->GetSize() < cur_page->GetMaxSize()) {
     auto ok = cur_page->Insert(key, value, comparator_);
     ctx.write_set_.clear();
+    root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
     return ok;
   }
@@ -185,11 +187,13 @@ auto BPLUSTREE_TYPE::InsertInternal(Context &ctx, KeyType key, page_id_t page_id
     page_id = right_page_id;
   }
 
-  // BUSTUB_ASSERT(ctx_.IsRootPage(leaf_guard.PageId()) || ctx_.IsRootPage(cur_guard.PageId()), "the current page is not
-  // the root page, error!");
-
+  // the split is continue, so the current node is root
   page_id_t new_root_page_id;
   auto _ = bpm_->NewPageGuarded(&new_root_page_id);
+
+  root_page_id_ = new_root_page_id;
+  root_page_id_latch_.WUnlock();
+
   auto root_guard = bpm_->FetchPageWrite(new_root_page_id);
   _.Drop();
 
@@ -199,7 +203,6 @@ auto BPLUSTREE_TYPE::InsertInternal(Context &ctx, KeyType key, page_id_t page_id
 
   auto header_page = ctx.header_page_->AsMut<BPlusTreeHeaderPage>();
   header_page->root_page_id_ = new_root_page_id;
-  root_page_id_ = new_root_page_id;
   ctx.root_page_id_ = new_root_page_id;
   ctx.write_set_.clear();
   ReleaseHeader(ctx);
@@ -247,9 +250,11 @@ auto BPLUSTREE_TYPE::Split(N *cur_page, const int &right_start, page_id_t *page_
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   Context ctx;
-  FetchHeaderWrite(ctx);
   // empty tree
+  root_page_id_latch_.WLock();
+  ctx.root_page_id_ = root_page_id_;
   if (IsEmpty()) {
+    root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
     return;
   }
@@ -263,6 +268,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   auto leaf_page = ctx.write_set_.back().AsMut<LeafPage>();
   if (!leaf_page->Exist(key, val, &idx, comparator_)) {
     ctx.write_set_.clear();
+    root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
     return;
   }
@@ -272,6 +278,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   // after delete, still half full
   if (leaf_page->GetSize() >= leaf_page->GetMinSize()) {
     ctx.write_set_.clear();
+    root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
 
     return;
@@ -282,6 +289,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
     if (leaf_page->GetSize() == 0) {
       RemoveRoot(ctx, INVALID_PAGE_ID);
     }
+    root_page_id_latch_.WUnlock();
     ctx.write_set_.clear();
     ReleaseHeader(ctx);
 
@@ -379,6 +387,8 @@ void BPLUSTREE_TYPE::RemoveFromFile(const std::string &file_name, Transaction *t
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetLeaf(Context &ctx, const KeyType &key) -> ReadPageGuard {
   auto cur_guard = bpm_->FetchPageRead(root_page_id_);
+  // after read the page, release the root_page_id latch
+  root_page_id_latch_.RUnlock();
   auto *node = cur_guard.As<BPlusTreePage>();
 
   while (!node->IsLeafPage()) {
@@ -400,6 +410,7 @@ void BPLUSTREE_TYPE::GetLeafAndUpdate(Context &ctx, const KeyType &key, std::uno
   auto cur_guard = bpm_->FetchPageWrite(root_page_id_);
   auto *node = cur_guard.AsMut<BPlusTreePage>();
   ctx.write_set_.emplace_back(std::move(cur_guard));
+  ctx.root_page_id_ = root_page_id_;
 
   page_id_t page_id = INVALID_PAGE_ID;
   while (!node->IsLeafPage()) {
@@ -518,9 +529,6 @@ void BPLUSTREE_TYPE::RemoveLeaf(Context &ctx, std::unordered_map<page_id_t, int>
 
     RemoveInternal(ctx, pos, del_index, new_key);
 
-    ctx.write_set_.clear();
-    ReleaseHeader(ctx);
-
     return;
   }
 
@@ -543,9 +551,6 @@ void BPLUSTREE_TYPE::RemoveLeaf(Context &ctx, std::unordered_map<page_id_t, int>
     cur_page->SetSize(total_size - idx_half);
     parent_page->SetKeyAt(index_in_parent + 1, right_page->KeyAt(0));
   }
-
-  ctx.write_set_.clear();
-  ReleaseHeader(ctx);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -570,6 +575,7 @@ void BPLUSTREE_TYPE::RemoveInternal(Context &ctx, std::unordered_map<page_id_t, 
       if (cur_page->GetSize() == 1) {
         RemoveRoot(ctx, cur_page->ValueAt(0));
       }
+      root_page_id_latch_.WUnlock();
       return;
     }
 
