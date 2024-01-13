@@ -64,7 +64,7 @@ void InsertHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
   GenericKey<8> index_key;
   RID rid;
   // create transaction
-  Transaction *transaction = new Transaction(tid);
+  auto transaction = new Transaction(tid);
   for (auto key : keys) {
     int64_t value = key & 0xFFFFFFFF;
     rid.Set(static_cast<int32_t>(key >> 32), value);
@@ -205,7 +205,7 @@ void BPlusTreeBenchmarkCall() {
     LookupHelper(&tree, remain_keys, txn_start_id);
     // iterate through all the keys in BPlusTree
     size_t size = 0;
-    for (auto &pair: tree) { //NO_LINT
+    for (auto &pair : tree) {                      // NO_LINT
       if ((pair.first).ToString() % sieve == 1) {  // check remain keys to be odd
         size++;
       } else {

@@ -91,6 +91,7 @@ TEST(BPlusTreeTests, InsertTest2) {
 
   // std::cout << tree.DrawBPlusTree() << std::endl;
 
+  // tree.Draw(bpm, "/home/ubuntu/code/bustub-database/test/storage/testRemove.dot");
   std::vector<RID> rids;
   for (auto key : keys) {
     rids.clear();
@@ -124,7 +125,7 @@ TEST(BPlusTreeTests, InsertTest2) {
   delete bpm;
 }
 
-TEST(BPlusTreeTests, DISABLED_InsertTest3) {
+TEST(BPlusTreeTests, InsertTest3) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -150,6 +151,8 @@ TEST(BPlusTreeTests, DISABLED_InsertTest3) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid, transaction);
   }
+
+  tree.Draw(bpm, "/home/ubuntu/code/bustub-database/test/storage/testRemove.dot");
 
   std::vector<RID> rids;
   for (auto key : keys) {
@@ -183,6 +186,8 @@ TEST(BPlusTreeTests, DISABLED_InsertTest3) {
     EXPECT_EQ(location.GetSlotNum(), current_key);
     current_key = current_key + 1;
   }
+
+  EXPECT_EQ(current_key, keys.size() + 1);
 
   bpm->UnpinPage(HEADER_PAGE_ID, true);
   delete transaction;

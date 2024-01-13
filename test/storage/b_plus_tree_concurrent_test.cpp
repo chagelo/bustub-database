@@ -16,6 +16,7 @@
 #include <thread>  // NOLINT
 
 #include "buffer/buffer_pool_manager.h"
+#include "common/logger.h"
 #include "gtest/gtest.h"
 #include "storage/disk/disk_manager_memory.h"
 #include "storage/index/b_plus_tree.h"
@@ -52,6 +53,7 @@ void InsertHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
     int64_t value = key & 0xFFFFFFFF;
     rid.Set(static_cast<int32_t>(key >> 32), value);
     index_key.SetFromInteger(key);
+    // LOG_DEBUG("thread : %ld, insert key %ld", thread_itr, key);
     tree->Insert(index_key, rid, transaction);
   }
   delete transaction;
@@ -69,6 +71,7 @@ void InsertHelperSplit(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree
       int64_t value = key & 0xFFFFFFFF;
       rid.Set(static_cast<int32_t>(key >> 32), value);
       index_key.SetFromInteger(key);
+      // LOG_DEBUG("thread : %ld, insert key %ld", thread_itr, key);
       tree->Insert(index_key, rid, transaction);
     }
   }
@@ -83,6 +86,7 @@ void DeleteHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
   auto *transaction = new Transaction(0);
   for (auto key : remove_keys) {
     index_key.SetFromInteger(key);
+    // LOG_DEBUG("thread : %ld, remove key %ld", thread_itr, key);
     tree->Remove(index_key, transaction);
   }
   delete transaction;
@@ -98,6 +102,7 @@ void DeleteHelperSplit(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree
   for (auto key : remove_keys) {
     if (static_cast<uint64_t>(key) % total_threads == thread_itr) {
       index_key.SetFromInteger(key);
+      // LOG_DEBUG("thread : %ld, remove key %ld", thread_itr, key);
       tree->Remove(index_key, transaction);
     }
   }
@@ -114,6 +119,7 @@ void LookupHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
     rid.Set(static_cast<int32_t>(key >> 32), value);
     index_key.SetFromInteger(key);
     std::vector<RID> result;
+    // LOG_DEBUG("thread : %ld, lookup key %ld", thread_itr, key);
     bool res = tree->GetValue(index_key, &result, transaction);
     ASSERT_EQ(res, true);
     ASSERT_EQ(result.size(), 1);
@@ -122,7 +128,7 @@ void LookupHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
   delete transaction;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_InsertTest1) {
+TEST(BPlusTreeConcurrentTest, InsertTest1) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -170,7 +176,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_InsertTest1) {
   delete bpm;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_InsertTest2) {
+TEST(BPlusTreeConcurrentTest, InsertTest2) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -217,7 +223,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_InsertTest2) {
   delete bpm;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest1) {
+TEST(BPlusTreeConcurrentTest, DeleteTest1) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -256,7 +262,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest1) {
   delete bpm;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest2) {
+TEST(BPlusTreeConcurrentTest, DeleteTest2) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -295,7 +301,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest2) {
   delete bpm;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_MixTest1) {
+TEST(BPlusTreeConcurrentTest, MixTest1) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -336,7 +342,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_MixTest1) {
   delete bpm;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_MixTest2) {
+TEST(BPlusTreeConcurrentTest, MixTest2) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -359,11 +365,13 @@ TEST(BPlusTreeConcurrentTest, DISABLED_MixTest2) {
   int64_t sieve = 5;
   for (int64_t i = 1; i <= total_keys; i++) {
     if (i % sieve == 0) {
+      // LOG_DEBUG("dsadsa %ld", i);
       perserved_keys.push_back(i);
     } else {
       dynamic_keys.push_back(i);
     }
   }
+
   InsertHelper(&tree, perserved_keys, 1);
   // Check there are 1000 keys in there
   size_t size;
@@ -377,7 +385,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_MixTest2) {
   tasks.emplace_back(insert_task);
   tasks.emplace_back(delete_task);
   tasks.emplace_back(lookup_task);
-
+  // LOG_DEBUG("%s", tree.DrawBPlusTree().c_str());
   size_t num_threads = 6;
   for (size_t i = 0; i < num_threads; i++) {
     threads.emplace_back(std::thread{tasks[i % tasks.size()], i});
@@ -391,10 +399,12 @@ TEST(BPlusTreeConcurrentTest, DISABLED_MixTest2) {
 
   for (auto iter = tree.Begin(); iter != tree.End(); ++iter) {
     const auto &pair = *iter;
+    // LOG_DEBUG("in leaf %ld", (pair.first).ToString());
     if ((pair.first).ToString() % sieve == 0) {
       size++;
     }
   }
+  // LOG_DEBUG("%s", tree.DrawBPlusTree().c_str());
 
   ASSERT_EQ(size, perserved_keys.size());
 
