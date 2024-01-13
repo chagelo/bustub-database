@@ -118,7 +118,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Move(const int &st, const int &direc) {
   if (direc == 1) {  // [....] -> [...|...]
     std::copy_backward(array_, array_ + GetSize(), array_ + st);
   } else {  // [...|...] <- [....]
-    std::copy(array_ + st, array_ + GetSize(), array_ + 2 * st - GetSize());
+    std::copy(array_ + st, array_ + GetSize(), array_);
   }
 }
 

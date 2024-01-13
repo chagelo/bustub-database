@@ -31,6 +31,7 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
   auto head_page = guard.AsMut<BPlusTreeHeaderPage>();
   head_page->root_page_id_ = INVALID_PAGE_ID;
   root_page_id_ = INVALID_PAGE_ID;
+  leaf_max_size_ = std::min(leaf_max_size_, internal_max_size_ - 1);
 }
 
 /*
@@ -101,7 +102,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   GetLeafAndUpdate(ctx, key, nullptr);
   auto cur_guard = std::move(ctx.write_set_.back());
   ctx.write_set_.pop_back();
-  auto *cur_page = cur_guard.template AsMut<LeafPage>();
+  auto cur_page = cur_guard.template AsMut<LeafPage>();
 
   // insert a exist key
   ValueType temp;
@@ -115,10 +116,11 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
 
   // not full, insert directly
   if (cur_page->GetSize() < cur_page->GetMaxSize()) {
-    auto ok = cur_page->Insert(key, value, comparator_);
     ctx.write_set_.clear();
     root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
+
+    auto ok = cur_page->Insert(key, value, comparator_);
     return ok;
   }
 
@@ -159,11 +161,11 @@ auto BPLUSTREE_TYPE::InsertInternal(Context &ctx, KeyType key, page_id_t page_id
 
     // current page is not full, internal page, size == maxsize means full
     if (cur_page->GetSize() < cur_page->GetMaxSize()) {
-      auto ok = cur_page->Insert(key, page_id, comparator_, 1);
-
-      // release page and header
+      root_page_id_latch_.WUnlock();
       ctx.write_set_.clear();
       ReleaseHeader(ctx);
+
+      auto ok = cur_page->Insert(key, page_id, comparator_, 1);
 
       return ok;
     }
@@ -191,6 +193,7 @@ auto BPLUSTREE_TYPE::InsertInternal(Context &ctx, KeyType key, page_id_t page_id
   page_id_t new_root_page_id;
   auto _ = bpm_->NewPageGuarded(&new_root_page_id);
 
+  auto old_root_page_id = root_page_id_;
   root_page_id_ = new_root_page_id;
   root_page_id_latch_.WUnlock();
 
@@ -199,7 +202,7 @@ auto BPLUSTREE_TYPE::InsertInternal(Context &ctx, KeyType key, page_id_t page_id
 
   auto root_page = root_guard.AsMut<InternalPage>();
   root_page->Init(internal_max_size_);
-  root_page->RootInit(root_page_id_, key, page_id);
+  root_page->RootInit(old_root_page_id, key, page_id);
 
   auto header_page = ctx.header_page_->AsMut<BPlusTreeHeaderPage>();
   header_page->root_page_id_ = new_root_page_id;
@@ -250,9 +253,11 @@ auto BPLUSTREE_TYPE::Split(N *cur_page, const int &right_start, page_id_t *page_
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
   Context ctx;
+  FetchHeaderWrite(ctx);
+
   // empty tree
   root_page_id_latch_.WLock();
-  ctx.root_page_id_ = root_page_id_;
+  // ctx.root_page_id_ = root_page_id_;
   if (IsEmpty()) {
     root_page_id_latch_.WUnlock();
     ReleaseHeader(ctx);
@@ -321,6 +326,13 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(b
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
   Context ctx;
+  root_page_id_latch_.RLock();
+  // null tree
+  if (root_page_id_ == INVALID_PAGE_ID) {
+    root_page_id_latch_.RUnlock();
+    return INDEXITERATOR_TYPE();
+  }
+
   auto target_page_guard = GetLeaf(ctx, key);
   auto target_page = target_page_guard.template As<LeafPage>();
 
@@ -532,21 +544,22 @@ void BPLUSTREE_TYPE::RemoveLeaf(Context &ctx, std::unordered_map<page_id_t, int>
     return;
   }
 
+  root_page_id_latch_.WUnlock();
+
   // steal from sibling node;
   int idx_half = total_size / 2;
-
   if (is_last) {
     // [...|...] -> [...]
     // right -> cur
     cur_page->Move(idx_half, is_last);
-    right_page->MoveHalfTo(cur_page, total_size - idx_half, 0, right_page->GetSize() + idx_half - total_size);
+    right_page->MoveHalfTo(cur_page, total_size - idx_half, 0, idx_half - cur_page->GetSize());
     cur_page->SetSize(idx_half);
     right_page->SetSize(total_size - idx_half);
     parent_page->SetKeyAt(index_in_parent, cur_page->KeyAt(0));
   } else {
     // [...] <- [...|...]
     right_page->MoveHalfTo(cur_page, 0, cur_page->GetSize(), right_page->GetSize() - idx_half);
-    right_page->Move(idx_half, is_last);
+    right_page->Move(right_page->GetSize() - idx_half, is_last);
     right_page->SetSize(idx_half);
     cur_page->SetSize(total_size - idx_half);
     parent_page->SetKeyAt(index_in_parent + 1, right_page->KeyAt(0));
@@ -584,6 +597,7 @@ void BPLUSTREE_TYPE::RemoveInternal(Context &ctx, std::unordered_map<page_id_t, 
       new_key = cur_page->KeyAt(0);
       del_index = pos[cur_page_guard.PageId()] + 1;
       is_merge = false;
+      root_page_id_latch_.WUnlock();
       return;
     }
 
@@ -623,7 +637,7 @@ void BPLUSTREE_TYPE::RemoveInternal(Context &ctx, std::unordered_map<page_id_t, 
       if (is_last) {
         // [...|...] -> [...]
         cur_page->Move(idx_half, is_last);
-        right_page->MoveHalfTo(cur_page, total_size - idx_half, 0, right_page->GetSize() + idx_half - total_size);
+        right_page->MoveHalfTo(cur_page, total_size - idx_half, 0, idx_half - cur_page->GetSize());
         cur_page->SetSize(idx_half);
         right_page->SetSize(total_size - idx_half);
 
@@ -635,7 +649,7 @@ void BPLUSTREE_TYPE::RemoveInternal(Context &ctx, std::unordered_map<page_id_t, 
       } else {
         // [...] <- [...|...]F
         right_page->MoveHalfTo(cur_page, 0, cur_page->GetSize(), right_page->GetSize() - idx_half);
-        right_page->Move(idx_half, is_last);
+        right_page->Move(right_page->GetSize() - idx_half, is_last);
         right_page->SetSize(idx_half);
         cur_page->SetSize(total_size - idx_half);
 
