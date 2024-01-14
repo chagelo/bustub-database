@@ -1,3 +1,4 @@
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -316,7 +317,24 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *txn) {
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(bpm_, 1, 0); }
+auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
+  auto header_guard = bpm_->FetchPageRead(header_page_id_);
+  auto header_page = header_guard.As<BPlusTreeHeaderPage>();
+
+  if (header_page->root_page_id_ == INVALID_PAGE_ID) {
+    throw Exception(ExceptionType::INVALID, "INVALID_PAGE_ID");
+  }
+
+  ReadPageGuard guard = bpm_->FetchPageRead(header_page->root_page_id_);
+  auto page = guard.As<BPlusTreePage>();
+  while (!page->IsLeafPage()) {
+    auto internal_page = guard.As<InternalPage>();
+    guard = bpm_->FetchPageRead(internal_page->ValueAt(0));
+    page = guard.template As<BPlusTreePage>();
+  } 
+
+  return INDEXITERATOR_TYPE(bpm_, guard.PageId(), 0);
+}
 
 /*
  * Input parameter is low key, find the leaf page that contains the input key

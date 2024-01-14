@@ -10,8 +10,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cstdint>
 #include <memory>
 
+#include "catalog/schema.h"
+#include "common/config.h"
 #include "execution/executors/insert_executor.h"
 #include "storage/index/index.h"
 #include "storage/table/tuple.h"
@@ -34,16 +37,43 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     return false;
   }
 
+  // schema column not match
+  if (child_executor_->GetOutputSchema().GetColumnCount() != table_info_->schema_.GetColumnCount()) {
+    return false;
+  }
+  auto child_columns = child_executor_->GetOutputSchema().GetColumns();
+  auto table_columns = table_info_->schema_.GetColumns();
+
   auto count = 0;
   TupleMeta tuple_meta{.insert_txn_id_ = INVALID_TXN_ID, .delete_txn_id_ = INVALID_TXN_ID, .is_deleted_ = false};
-  std::cout << plan_->ToString() << std::endl;
   while (child_executor_->Next(tuple, rid)) {
+    // it means the tuple is in a page, it no need to insert again
+    // if (rid->GetPageId() != INVALID_PAGE_ID) {
+    //   continue;
+    // }
+
+    // compare the type of each couple column
+    bool no_match = false;
+    for (uint32_t i = 0; i < child_columns.size(); ++i) {
+      if (table_columns[i].GetType() != child_columns[i].GetType() ||
+          table_columns[i].GetOffset() != child_columns[i].GetOffset()) {
+        no_match = true;
+        break;
+      }
+    }
+    // type or the offset of the column differ
+    if (no_match) {
+      continue;
+    }
+
     // insert
     tuple_meta.is_deleted_ = false;
     auto insert_rid = table_info_->table_->InsertTuple(tuple_meta, *tuple);
-    if (insert_rid != std::nullopt) {
-      count++;
+    if (insert_rid == std::nullopt) {
+      continue;
     }
+
+    count++;
 
     // for this tuple, iterate each index, and insert index
     for (auto &index_info : index_infos_) {
@@ -53,8 +83,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     }
   }
 
-  std::vector<Value> values{{TypeId::INTEGER, count}};
-  *tuple = Tuple{values, &GetOutputSchema()};
+  *tuple = Tuple{std::vector<Value>{{TypeId::INTEGER, count}}, &GetOutputSchema()};
   is_ok_ = true;
   return true;
 }
