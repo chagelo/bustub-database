@@ -38,7 +38,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   TupleMeta tuple_meta{.insert_txn_id_ = INVALID_TXN_ID, .delete_txn_id_ = INVALID_TXN_ID, .is_deleted_ = false};
   auto &tuple_schema = child_executor_->GetOutputSchema();
-  
+
   while (child_executor_->Next(tuple, rid)) {
     std::vector<Value> values{};
     for (const auto &expr : plan_->target_expressions_) {
@@ -46,23 +46,22 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     }
 
     auto new_tuple = Tuple{values, &tuple_schema};
-
+    
     tuple_meta.is_deleted_ = false;
     auto insert_ok = table_info_->table_->InsertTuple(tuple_meta, new_tuple);
-
     if (insert_ok != std::nullopt) {
       tuple_meta.is_deleted_ = true;
       table_info_->table_->UpdateTupleMeta(tuple_meta, *rid);
 
       // first construct the key of the index of this tuple for each index
       // first delete the old key, than index new key
+      tuple_meta.is_deleted_ = false;
       for (auto &index_info : index_info_) {
-        std::cout << "321111111111111111" << std::endl;
         auto delet_key = tuple->KeyFromTuple(tuple_schema, index_info->key_schema_, index_info->index_->GetKeyAttrs());
         index_info->index_->DeleteEntry(delet_key, *rid, nullptr);
         auto insert_key =
             new_tuple.KeyFromTuple(tuple_schema, index_info->key_schema_, index_info->index_->GetKeyAttrs());
-        index_info->index_->InsertEntry(insert_key, *rid, nullptr);
+        index_info->index_->InsertEntry(insert_key, insert_ok.value(), nullptr);
       }
 
       count++;
