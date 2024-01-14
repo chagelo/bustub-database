@@ -91,6 +91,7 @@ class IndexMetadata {
   /** The name of the table on which the index is created */
   std::string table_name_;
   /** The mapping relation between key schema and tuple schema */
+  // which column used to construct the current index
   const std::vector<uint32_t> key_attrs_;
   /** The schema of the indexed key */
   std::shared_ptr<Schema> key_schema_;

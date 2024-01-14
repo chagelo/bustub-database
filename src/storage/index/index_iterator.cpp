@@ -33,7 +33,7 @@ INDEXITERATOR_TYPE::~IndexIterator() {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto INDEXITERATOR_TYPE::IsEnd() -> bool { return cur_page_id_ == INVALID_PAGE_ID || index_ == -1; }
+auto INDEXITERATOR_TYPE::IsEnd() -> bool { return cur_page_id_ == INVALID_PAGE_ID; }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator*() -> const MappingType & {
@@ -47,7 +47,7 @@ auto INDEXITERATOR_TYPE::operator*() -> const MappingType & {
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
-  if (cur_page_id_ == INVALID_PAGE_ID || index_ == -1) {
+  if (cur_page_id_ == INVALID_PAGE_ID) {
     return *this;
   }
 
@@ -55,14 +55,12 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
 
   // current iterator is already point to end;
   if (++index_ >= cur_page->GetSize()) {
-    if (cur_page->GetNextPageId() == INVALID_PAGE_ID) {
-      index_ = -1;
-      cur_page_id_ = INVALID_PAGE_ID;
-      cur_guard_.Drop();
-    } else {
-      index_ = 0;
-      cur_page_id_ = cur_page->GetNextPageId();
+    index_ = 0;
+    cur_page_id_ = cur_page->GetNextPageId();
+    if (cur_page_id_ != INVALID_PAGE_ID) {
       cur_guard_ = bpm_->FetchPageRead(cur_page_id_);
+    } else {
+      cur_guard_.Drop();
     }
   }
   return *this;
@@ -70,12 +68,27 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator==(const IndexIterator &itr) const -> bool {
-  return cur_page_id_ == itr.cur_page_id_ && index_ == itr.index_;
+  if (cur_page_id_ == INVALID_PAGE_ID && itr.cur_page_id_ == INVALID_PAGE_ID) {
+    return true;
+  }
+
+  if (cur_page_id_ == itr.cur_page_id_ && index_ == itr.index_) {
+    return true;
+  }
+
+  return false;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator!=(const IndexIterator &itr) const -> bool {
-  return !(cur_page_id_ == itr.cur_page_id_ && index_ == itr.index_);
+  if (cur_page_id_ == INVALID_PAGE_ID && itr.cur_page_id_ == INVALID_PAGE_ID) {
+    return false;
+  }
+  if (cur_page_id_ == itr.cur_page_id_ && index_ == itr.index_) {
+    return false;
+  }
+
+  return true;
 }
 
 template class IndexIterator<GenericKey<4>, RID, GenericComparator<4>>;

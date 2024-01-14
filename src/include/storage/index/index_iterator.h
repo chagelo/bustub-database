@@ -43,6 +43,8 @@ class IndexIterator {
 
   auto operator!=(const IndexIterator &itr) const -> bool;
 
+  // auto operator=(const IndexIterator &itr) -> IndexIterator;
+
  private:
   BufferPoolManager *bpm_;
   page_id_t cur_page_id_;
