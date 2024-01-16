@@ -322,7 +322,8 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
   auto header_page = header_guard.As<BPlusTreeHeaderPage>();
 
   if (header_page->root_page_id_ == INVALID_PAGE_ID) {
-    throw Exception(ExceptionType::INVALID, "INVALID_PAGE_ID");
+    // empty index tree, return end
+    return INDEXITERATOR_TYPE();
   }
 
   ReadPageGuard guard = bpm_->FetchPageRead(header_page->root_page_id_);
