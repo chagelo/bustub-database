@@ -19,10 +19,11 @@ namespace bustub {
 
 SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
     : AbstractExecutor(exec_ctx),
-      plan_(plan),
-      iter_(exec_ctx_->GetCatalog()->GetTable(plan_->table_name_)->table_->MakeIterator()) {}
+      plan_(plan), iter_(exec_ctx_->GetCatalog()->GetTable(plan_->table_name_)->table_->MakeIterator()){}
 
-void SeqScanExecutor::Init() {}
+void SeqScanExecutor::Init() {
+  iter_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_name_)->table_->MakeIterator();
+}
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   for (; !iter_.IsEnd();) {

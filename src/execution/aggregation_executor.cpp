@@ -33,6 +33,7 @@ AggregationExecutor::AggregationExecutor(ExecutorContext *exec_ctx, const Aggreg
 void AggregationExecutor::Init() {
   // Add this line
   child_->Init();
+  aht_.Clear();
   Tuple child_tuple{};
   RID child_rid{};
 
