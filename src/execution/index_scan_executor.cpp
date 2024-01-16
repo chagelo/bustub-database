@@ -25,10 +25,7 @@ IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanP
 void IndexScanExecutor::Init() {}
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  std::cout << index_info_->key_size_ << " " << index_info_->index_oid_ << " " << plan_->OutputSchema().ToString() << " " << std::endl;
-  std::cout << index_info_->key_schema_.ToString() << std::endl;
-
-  for (; !iter_.IsEnd(); ) {
+  for (; !iter_.IsEnd();) {
     *rid = (*iter_).second;
     ++iter_;
     auto [tuple_meta, tmp_tuple] = table_info_->table_->GetTuple(*rid);

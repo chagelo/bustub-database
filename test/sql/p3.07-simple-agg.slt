@@ -1,11 +1,5 @@
 # 4 pts
 
-# How many TAs are there in 2023 Spring?
-query
-select count(*) from __mock_table_tas_2023;
-----
-9
-
 # The real test process begins...
 
 # Create a table
