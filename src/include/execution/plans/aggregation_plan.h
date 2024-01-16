@@ -81,11 +81,16 @@ class AggregationPlanNode : public AbstractPlanNode {
 
   BUSTUB_PLAN_NODE_CLONE_WITH_CHILDREN(AggregationPlanNode);
 
+
+  // SELECT min(t.z), max(t.z), sum(t.z) FROM t GROUP BY t.x, t.y;
   /** The GROUP BY expressions */
+  // {t.x, t.y}
   std::vector<AbstractExpressionRef> group_bys_;
   /** The aggregation expressions */
+  // {t.z, t.z, t.z}
   std::vector<AbstractExpressionRef> aggregates_;
   /** The aggregation types */
+  // {min, max, sum}
   std::vector<AggregationType> agg_types_;
 
  protected:
