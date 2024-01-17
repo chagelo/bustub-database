@@ -14,11 +14,13 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/hash_join_plan.h"
 #include "storage/table/tuple.h"
+#include "type/value.h"
 
 namespace bustub {
 
@@ -27,6 +29,7 @@ namespace bustub {
  */
 class HashJoinExecutor : public AbstractExecutor {
  public:
+ using HashKeyIter = std::unordered_multimap<HashKey, Tuple> ::iterator;
   /**
    * Construct a new HashJoinExecutor instance.
    * @param exec_ctx The executor context
@@ -51,9 +54,22 @@ class HashJoinExecutor : public AbstractExecutor {
   /** @return The output schema for the join */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
+  // left_child_->Next
+  void LeftNext();
+  // HashJoinBuild
+  void HashJoinBuild();
+  void ConstructOutPut(Tuple *tuple, Tuple *left_tuple, const Schema *left_schema, Tuple *right_tuple, const Schema *right_schema);
+
  private:
   /** The NestedLoopJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> left_child_;
+  std::unique_ptr<AbstractExecutor> right_child_;
+  std::unordered_multimap<HashKey, Tuple> ht_;
+  HashKeyIter ht_iterator_;
+  std::pair<HashKeyIter, HashKeyIter> range_;
+  bool left_not_end_{false};
+  Tuple left_tuple_{};
 };
 
 }  // namespace bustub
