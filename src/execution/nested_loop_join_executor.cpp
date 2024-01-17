@@ -37,27 +37,18 @@ void NestedLoopJoinExecutor::Init() {
   outer_not_end_ = left_executor_->Next(&left_tuple_, &rid);
   inner_not_end_ = right_executor_->Next(&right_tuple_, &rid);
   // std::cout << plan_->OutputSchema().ToString() << std::endl;
-  std::cout << plan_->ToString() << std::endl;
+  // std::cout << plan_->ToString() << std::endl;
   // std::cout << left_tuple_.ToString(&left_executor_->GetOutputSchema()) << " "
   //           << right_tuple_.ToString(&right_executor_->GetOutputSchema()) << std::endl;
-  // std::cout << "hello world" << std::endl;
 }
 
 auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   while (outer_not_end_ || inner_not_end_) {
-    // if (outer_not_end_) {
-    //   std::cout << left_tuple_.ToString(&left_executor_->GetOutputSchema()) << " left_tuple \n";
-    // }
-    // if (inner_not_end_) {
-    //   std::cout << right_tuple_.ToString(&right_executor_->GetOutputSchema()) << " right_tuple \n";
-    // }
     if (outer_not_end_ && inner_not_end_ &&
         (plan_->Predicate() == nullptr || plan_->Predicate()
                                               ->EvaluateJoin(&left_tuple_, plan_->GetLeftPlan()->OutputSchema(),
                                                              &right_tuple_, plan_->GetRightPlan()->OutputSchema())
                                               .GetAs<bool>())) {
-      // std::cout << left_tuple_.ToString(&left_executor_->GetOutputSchema()) << "world"
-                // << right_tuple_.ToString(&right_executor_->GetOutputSchema()) << std::endl;
 
       // construct tuple
       std::vector<Value> values{};
