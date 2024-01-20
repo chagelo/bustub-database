@@ -332,7 +332,7 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
     auto internal_page = guard.As<InternalPage>();
     guard = bpm_->FetchPageRead(internal_page->ValueAt(0));
     page = guard.template As<BPlusTreePage>();
-  } 
+  }
 
   return INDEXITERATOR_TYPE(bpm_, guard.PageId(), 0);
 }

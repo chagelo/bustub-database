@@ -46,7 +46,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     }
 
     auto new_tuple = Tuple{values, &tuple_schema};
-    
+
     tuple_meta.is_deleted_ = false;
     auto insert_ok = table_info_->table_->InsertTuple(tuple_meta, new_tuple);
     if (insert_ok != std::nullopt) {

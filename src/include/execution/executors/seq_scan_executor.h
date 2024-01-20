@@ -45,12 +45,15 @@ class SeqScanExecutor : public AbstractExecutor {
    */
   auto Next(Tuple *tuple, RID *rid) -> bool override;
 
+  auto Check(const AbstractExpressionRef &expr) -> bool;
+
   /** @return The output schema for the sequential scan */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
  private:
   /** The sequential scan plan node to be executed */
   const SeqScanPlanNode *plan_;
-  TableIterator iter_;
+  std::shared_ptr<TableIterator> iter_;
+  bool is_false_{false};
 };
 }  // namespace bustub

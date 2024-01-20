@@ -48,6 +48,8 @@ class FilterExecutor : public AbstractExecutor {
    */
   auto Next(Tuple *tuple, RID *rid) -> bool override;
 
+  auto Check(const AbstractExpressionRef &expr) -> bool;
+
   /** @return The output schema for the filter plan */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
@@ -57,5 +59,8 @@ class FilterExecutor : public AbstractExecutor {
 
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+
+  // there might be always false equation
+  bool is_false_{false};
 };
 }  // namespace bustub

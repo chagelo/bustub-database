@@ -10,7 +10,7 @@ auto Optimizer::Optimize(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef
     // Use starter rules when `force_starter_rule_` is set to true.
     auto p = plan;
     p = OptimizeMergeProjection(p);
-    p = OptimizeMergeFilterNLJ(p);
+    p = OptimizePushDownFilter(p);
     p = OptimizeNLJAsHashJoin(p);
     p = OptimizeOrderByAsIndexScan(p);
     p = OptimizeSortLimitAsTopN(p);

@@ -31,9 +31,10 @@ NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const 
       right_executor_(right_executor.release()) {}
 
 void NestedLoopJoinExecutor::Init() {
+  RID rid{};
   left_executor_->Init();
   right_executor_->Init();
-  RID rid{};
+
   outer_not_end_ = left_executor_->Next(&left_tuple_, &rid);
   inner_not_end_ = right_executor_->Next(&right_tuple_, &rid);
   // std::cout << plan_->OutputSchema().ToString() << std::endl;
@@ -45,22 +46,23 @@ void NestedLoopJoinExecutor::Init() {
 auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   while (outer_not_end_ || inner_not_end_) {
     if (outer_not_end_ && inner_not_end_ &&
-        (plan_->Predicate() == nullptr || plan_->Predicate()
-                                              ->EvaluateJoin(&left_tuple_, plan_->GetLeftPlan()->OutputSchema(),
-                                                             &right_tuple_, plan_->GetRightPlan()->OutputSchema())
-                                              .GetAs<bool>())) {
-
+        (plan_->Predicate() == nullptr || (plan_->Predicate()
+                                               ->EvaluateJoin(&left_tuple_, plan_->GetLeftPlan()->OutputSchema(),
+                                                              &right_tuple_, plan_->GetRightPlan()->OutputSchema())
+                                               .GetAs<bool>() &&
+                                           !plan_->Predicate()
+                                                ->EvaluateJoin(&left_tuple_, plan_->GetLeftPlan()->OutputSchema(),
+                                                               &right_tuple_, plan_->GetRightPlan()->OutputSchema())
+                                                .IsNull()))) {
       // construct tuple
       std::vector<Value> values{};
       auto left_shema = left_executor_->GetOutputSchema();
       auto right_shema = right_executor_->GetOutputSchema();
       values.reserve(left_shema.GetColumnCount() + right_shema.GetColumnCount());
-      
-      
+
       for (uint32_t i = 0; i < left_shema.GetColumnCount(); ++i) {
         values.emplace_back(left_tuple_.GetValue(&left_shema, i));
       }
-
 
       // std::cout << left_tuple_.ToString(&left_shema) << std::endl;
       for (uint32_t i = 0; i < right_shema.GetColumnCount(); ++i) {
@@ -72,7 +74,9 @@ auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       return true;
     }
     if (inner_not_end_) {
-      inner_not_end_ = right_executor_->Next(&right_tuple_, rid);
+      if (plan_->GetRightPlan() != nullptr) {
+        inner_not_end_ = right_executor_->Next(&right_tuple_, rid);
+      }
     } else {
       // outer not end, inner end, find no the matched inner tuple, return null
       if (!find_ && plan_->GetJoinType() == JoinType::LEFT) {

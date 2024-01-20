@@ -13,14 +13,47 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "common/util/hash_util.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/hash_join_plan.h"
 #include "storage/table/tuple.h"
 #include "type/value.h"
+
+namespace bustub {
+struct HashKey {
+  // hashkeyavalues;
+  std::vector<Value> attrs_;
+
+  auto operator==(const HashKey &other) const -> bool {
+    for (uint32_t i = 0; i < other.attrs_.size(); i++) {
+      if (attrs_[i].CompareEquals(other.attrs_[i]) != CmpBool::CmpTrue) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+}  // namespace bustub
+
+namespace std {
+template <>
+struct hash<bustub::HashKey> {
+  auto operator()(const bustub::HashKey &hash_key) const -> std::size_t {
+    size_t curr_hash = 0;
+    for (const auto &key : hash_key.attrs_) {
+      if (!key.IsNull()) {
+        curr_hash = bustub::HashUtil::CombineHashes(curr_hash, bustub::HashUtil::HashValue(&key));
+      }
+    }
+    return curr_hash;
+  }
+};
+};  // namespace std
 
 namespace bustub {
 
@@ -29,7 +62,7 @@ namespace bustub {
  */
 class HashJoinExecutor : public AbstractExecutor {
  public:
- using HashKeyIter = std::unordered_multimap<HashKey, Tuple> ::iterator;
+  using HashKeyIter = std::unordered_multimap<HashKey, Tuple>::iterator;
   /**
    * Construct a new HashJoinExecutor instance.
    * @param exec_ctx The executor context
@@ -58,7 +91,8 @@ class HashJoinExecutor : public AbstractExecutor {
   void LeftNext();
   // HashJoinBuild
   void HashJoinBuild();
-  void ConstructOutPut(Tuple *tuple, Tuple *left_tuple, const Schema *left_schema, Tuple *right_tuple, const Schema *right_schema);
+  void ConstructOutPut(Tuple *tuple, Tuple *left_tuple, const Schema *left_schema, Tuple *right_tuple,
+                       const Schema *right_schema);
 
  private:
   /** The NestedLoopJoin plan node to be executed. */

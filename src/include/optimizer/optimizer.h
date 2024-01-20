@@ -11,6 +11,7 @@
 #include "concurrency/transaction.h"
 #include "execution/expressions/abstract_expression.h"
 #include "execution/plans/abstract_plan.h"
+#include "execution/plans/projection_plan.h"
 
 namespace bustub {
 
@@ -91,6 +92,13 @@ class Optimizer {
    * @brief optimize sort + limit as top N
    */
   auto OptimizeSortLimitAsTopN(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
+  auto OptimizePushDownFilter(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
+  auto RewriteExpressionForFilterProjection(const AbstractExpressionRef &plan, const ProjectionPlanNode &proj_plan)
+      -> AbstractExpressionRef;
+
+  auto RewriteExpressionForFilter(const AbstractExpressionRef &expr) -> std::vector<AbstractExpressionRef>;
 
   /**
    * @brief get the estimated cardinality for a table based on the table name. Useful when join reordering. BusTub

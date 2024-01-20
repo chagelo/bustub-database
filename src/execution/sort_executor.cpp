@@ -17,7 +17,7 @@ void SortExecutor::Init() {
   RID rid{};
 
   if (!sorted_tuples_.empty()) {
-    return;    
+    return;
   }
 
   while (child_executor_->Next(&tuple, &rid)) {

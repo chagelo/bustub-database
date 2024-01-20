@@ -27,7 +27,7 @@
 #include "storage/table/tuple.h"
 
 namespace bustub {
-  
+
 /**
  * The TopNExecutor executor executes a topn.
  */
@@ -76,7 +76,7 @@ class TopNExecutor : public AbstractExecutor {
   const TopNPlanNode *plan_;
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
-  std::vector<Tuple>sorted_tuples_;
+  std::vector<Tuple> sorted_tuples_;
   // std::priority_queue<Tuple, std::vector<Tuple>, Compare> tuple_queue_;
   uint32_t index_{0};
 };

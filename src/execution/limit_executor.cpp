@@ -27,7 +27,7 @@ auto LimitExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (count_ >= plan_->GetLimit()) {
     return false;
   }
-  
+
   auto ok = child_executor_->Next(tuple, rid);
   if (ok) {
     count_++;

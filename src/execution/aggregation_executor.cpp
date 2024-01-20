@@ -79,11 +79,11 @@ auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       values.emplace_back(std::move(gp));
     }
   }
-  
+
   for (auto &agg : aggre.aggregates_) {
     values.emplace_back(std::move(agg));
   }
-  
+
   *tuple = Tuple{values, &GetOutputSchema()};
   ++aht_iterator_;
   return true;

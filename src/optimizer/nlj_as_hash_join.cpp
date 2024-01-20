@@ -49,25 +49,27 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
             auto right_expr_tuple = std::make_shared<ColumnValueExpression>(
                 right_expr->GetTupleIdx(), right_expr->GetColIdx(), right_expr->GetReturnType());
 
-            // Typle Match
-            if (left_schema.GetColumn(left_expr->GetColIdx()).GetType() ==
-                right_schema.GetColumn(right_expr->GetColIdx()).GetType()) {
-              std::vector<AbstractExpressionRef> left_expres{};
-              std::vector<AbstractExpressionRef> right_expres{};
-              if (left_expr->GetTupleIdx() == 0 && right_expr->GetTupleIdx() == 1) {
+            std::vector<AbstractExpressionRef> left_expres{};
+            std::vector<AbstractExpressionRef> right_expres{};
+            if (left_expr->GetTupleIdx() == 0 && right_expr->GetTupleIdx() == 1) {
+              if (left_schema.GetColumn(left_expr->GetColIdx()).GetType() ==
+                  right_schema.GetColumn(right_expr->GetColIdx()).GetType()) {
                 left_expres.push_back(AbstractExpressionRef{std::move(left_expr_tuple)});
                 right_expres.push_back(AbstractExpressionRef{std::move(right_expr_tuple)});
-              } else if (left_expr->GetTupleIdx() == 1 && right_expr->GetTupleIdx() == 0) {
+              }
+            } else if (left_expr->GetTupleIdx() == 1 && right_expr->GetTupleIdx() == 0) {
+              if (left_schema.GetColumn(right_expr->GetColIdx()).GetType() ==
+                  right_schema.GetColumn(left_expr->GetColIdx()).GetType()) {
                 left_expres.push_back(AbstractExpressionRef{std::move(right_expr_tuple)});
                 right_expres.push_back(AbstractExpressionRef{std::move(left_expr_tuple)});
-              } else {
-                return optimized_plan;
               }
-
-              return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, nlj_plan.GetLeftPlan(),
-                                                        nlj_plan.GetRightPlan(), std::move(left_expres),
-                                                        std::move(right_expres), nlj_plan.GetJoinType());
+            } else {
+              return optimized_plan;
             }
+
+            return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, nlj_plan.GetLeftPlan(),
+                                                      nlj_plan.GetRightPlan(), std::move(left_expres),
+                                                      std::move(right_expres), nlj_plan.GetJoinType());
           }
         }
       }
@@ -98,17 +100,18 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
           auto right_expr_tuple = std::make_shared<ColumnValueExpression>(
               right_expr->GetTupleIdx(), right_expr->GetColIdx(), right_expr->GetReturnType());
 
-          // Typle Match
-          if (left_schema.GetColumn(left_expr->GetColIdx()).GetType() !=
-              right_schema.GetColumn(right_expr->GetColIdx()).GetType()) {
-            return optimized_plan;
-          }
           if (left_expr->GetTupleIdx() == 0 && right_expr->GetTupleIdx() == 1) {
-            left_expres.push_back(AbstractExpressionRef{std::move(left_expr_tuple)});
-            right_expres.push_back(AbstractExpressionRef{std::move(right_expr_tuple)});
+            if (left_schema.GetColumn(left_expr->GetColIdx()).GetType() ==
+                right_schema.GetColumn(right_expr->GetColIdx()).GetType()) {
+              left_expres.push_back(AbstractExpressionRef{std::move(left_expr_tuple)});
+              right_expres.push_back(AbstractExpressionRef{std::move(right_expr_tuple)});
+            }
           } else if (left_expr->GetTupleIdx() == 1 && right_expr->GetTupleIdx() == 0) {
-            left_expres.push_back(AbstractExpressionRef{std::move(right_expr_tuple)});
-            right_expres.push_back(AbstractExpressionRef{std::move(left_expr_tuple)});
+            if (left_schema.GetColumn(right_expr->GetColIdx()).GetType() ==
+                right_schema.GetColumn(left_expr->GetColIdx()).GetType()) {
+              left_expres.push_back(AbstractExpressionRef{std::move(right_expr_tuple)});
+              right_expres.push_back(AbstractExpressionRef{std::move(left_expr_tuple)});
+            }
           } else {
             return optimized_plan;
           }

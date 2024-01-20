@@ -48,7 +48,6 @@ void TopNExecutor::Init() {
 }
 
 auto TopNExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  std::cout << GetNumInHeap() << std::endl;
   if (sorted_tuples_.empty()) {
     return false;
   }

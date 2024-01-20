@@ -30,11 +30,11 @@ class IndexIterator {
 
  public:
   DISALLOW_COPY(IndexIterator);
-  
+
   IndexIterator();
   IndexIterator(BufferPoolManager *bpm, page_id_t cur_page_id, int index);
   IndexIterator(IndexIterator &&) noexcept = default;
-  auto operator=(IndexIterator &&) noexcept -> IndexIterator & = default ;
+  auto operator=(IndexIterator &&) noexcept -> IndexIterator & = default;
   ~IndexIterator();  // NOLINT
 
   auto IsEnd() -> bool;
