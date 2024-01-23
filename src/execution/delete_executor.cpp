@@ -50,9 +50,18 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     tuple_meta.is_deleted_ = true;
     table_info_->table_->UpdateTupleMeta(tuple_meta, *rid);
 
+    // when aborted, we need to undo the previous write operation, so here is a record for undo
+    auto record = TableWriteRecord(table_info_->oid_, *rid, table_info_->table_.get());
+    record.wtype_ = WType::DELETE;
+    exec_ctx_->GetTransaction()->AppendTableWriteRecord(record);
+
     for (auto &index : index_info_) {
       auto delete_key = tuple->KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs());
       index->index_->DeleteEntry(delete_key, *rid, nullptr);
+
+      // when aborted, we need to undo the previous write operation, so here is a record for undo
+      exec_ctx_->GetTransaction()->AppendIndexWriteRecord(IndexWriteRecord(
+          *rid, table_info_->oid_, WType::DELETE, delete_key, index->index_oid_, exec_ctx_->GetCatalog()));
     }
 
     count++;

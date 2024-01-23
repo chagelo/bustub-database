@@ -15,6 +15,9 @@
 
 #include "catalog/schema.h"
 #include "common/config.h"
+#include "common/exception.h"
+#include "concurrency/lock_manager.h"
+#include "concurrency/transaction.h"
 #include "execution/executors/insert_executor.h"
 #include "storage/index/index.h"
 #include "storage/table/tuple.h"
@@ -30,8 +33,20 @@ void InsertExecutor::Init() {
   child_executor_->Init();
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
   index_infos_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+
+  try {
+    if (!exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE,
+                                                table_info_->oid_)) {
+      throw ExecutionException("Lock Table FAILED");
+    }
+  } catch (TransactionAbortException &e) {
+    throw ExecutionException("InsertExecutor::Init " + e.GetInfo());
+  }
 }
 
+// If a transaction aborts, you will need to undo its previous write operations;
+// to achieve this, you will need to maintain the write set in each transaction,
+// which is used by the Abort() method of the transaction manager.
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   if (is_ok_) {
     return false;
@@ -46,7 +61,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   auto count = 0;
   TupleMeta tuple_meta{.insert_txn_id_ = INVALID_TXN_ID, .delete_txn_id_ = INVALID_TXN_ID, .is_deleted_ = false};
-  while (child_executor_->Next(tuple, rid)) {
+  while (child_executor_->Next(tuple, rid)) {  // value executor
     // it means the tuple is in a page, it no need to insert again
     // if (rid->GetPageId() != INVALID_PAGE_ID) {
     //   continue;
@@ -75,11 +90,20 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
     count++;
 
+    // when aborted, we need undo the previous wirte operation, so here we need to record the write operation
+    auto record = TableWriteRecord(table_info_->oid_, insert_rid.value(), table_info_->table_.get());
+    record.wtype_ = WType::INSERT;
+    exec_ctx_->GetTransaction()->AppendTableWriteRecord(record);
+
     // for this tuple, iterate each index, and insert index
     for (auto &index_info : index_infos_) {
       // new tuple select server column from the given tuple and tuple schema and key schema
       auto key = tuple->KeyFromTuple(table_info_->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
       index_info->index_->InsertEntry(key, insert_rid.value(), nullptr);
+
+      // when aborted, we need undo the previous wirte operation, so here we need to record the write operation
+      exec_ctx_->GetTransaction()->AppendIndexWriteRecord(IndexWriteRecord(
+          insert_rid.value(), table_info_->oid_, WType::INSERT, key, index_info->index_oid_, exec_ctx_->GetCatalog()));
     }
   }
 
