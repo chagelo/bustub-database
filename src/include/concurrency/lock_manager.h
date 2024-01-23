@@ -17,6 +17,7 @@
 #include <list>
 #include <memory>
 #include <mutex>  // NOLINT
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -327,6 +328,13 @@ class LockManager {
                  std::unordered_set<txn_id_t> &visited, txn_id_t *abort_txn_id) -> bool;
   void UnlockAll();
 
+  // help function for deadlock dection
+  void BuildGraph();
+  auto DFS(txn_id_t txn_id) -> bool;
+  void PrintGraph();
+  void RemoveAllAboutAbortTxn(txn_id_t tid);
+  void WakeAbortedTxn(txn_id_t tid);
+
   /** Structure that holds lock requests for a given table oid */
   std::unordered_map<table_oid_t, std::shared_ptr<LockRequestQueue>> table_lock_map_;
   /** Coordination */
@@ -340,8 +348,13 @@ class LockManager {
   std::atomic<bool> enable_cycle_detection_;
   std::thread *cycle_detection_thread_;
   /** Waits-for graph representation. */
-  std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
+  std::unordered_map<txn_id_t, std::set<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
+
+  // variable for construct wait graph
+  std::vector<txn_id_t> stk_;
+  std::unordered_map<txn_id_t, bool> in_stk_;
+  std::unordered_map<txn_id_t, bool> has_search_;
 };
 
 }  // namespace bustub
