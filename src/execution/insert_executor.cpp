@@ -87,8 +87,17 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     if (insert_rid == std::nullopt) {
       continue;
     }
-
     count++;
+
+    try {
+      if (!exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
+                                                table_info_->oid_, insert_rid.value())) {
+        exec_ctx_->GetTransaction()->SetState(TransactionState::ABORTED);
+        throw ExecutionException("Lock Row FAILED");
+      }
+    } catch (TransactionAbortException &e) {
+      throw ExecutionException("InsertExecutor::Next " + e.GetInfo());
+    }
 
     // when aborted, we need undo the previous wirte operation, so here we need to record the write operation
     auto record = TableWriteRecord(table_info_->oid_, insert_rid.value(), table_info_->table_.get());

@@ -29,6 +29,15 @@ void DeleteExecutor::Init() {
   child_executor_->Init();
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
   index_info_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+
+  try {
+    if (!exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE,
+                                                table_info_->oid_)) {
+      throw ExecutionException("Lock Table FAILED");
+    }
+  } catch (TransactionAbortException &e) {
+    throw ExecutionException("InsertExecutor::Init " + e.GetInfo());
+  }
 }
 
 auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
@@ -44,6 +53,16 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   while (child_executor_->Next(tuple, rid)) {
     if (rid->GetPageId() == INVALID_PAGE_ID) {
       continue;
+    }
+
+    try {
+      if (!exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
+                                                table_info_->oid_, *rid)) {
+        exec_ctx_->GetTransaction()->SetState(TransactionState::ABORTED);
+        throw ExecutionException("Lock Row FAILED");
+      }
+    } catch (TransactionAbortException &e) {
+      throw ExecutionException("InsertExecutor::Next " + e.GetInfo());
     }
 
     auto tuple_meta = table_info_->table_->GetTupleMeta(*rid);
