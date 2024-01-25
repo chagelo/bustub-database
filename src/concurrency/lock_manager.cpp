@@ -12,7 +12,6 @@
 
 #include "concurrency/lock_manager.h"
 #include <memory>
-#include <mutex>
 
 #include "common/config.h"
 #include "concurrency/transaction.h"
@@ -97,7 +96,7 @@ auto LockManager::CanLockUpgrade(LockManager::LockMode curr_lock_mode, LockManag
     -> bool {
   if (curr_lock_mode == LockManager::LockMode::INTENTION_SHARED) {  // IS->[S, X, IX, SIX]
     return requested_lock_mode == LockManager::LockMode::SHARED ||
-           requested_lock_mode == LockManager::LockMode::SHARED ||
+           requested_lock_mode == LockManager::LockMode::EXCLUSIVE ||
            requested_lock_mode == LockManager::LockMode::INTENTION_EXCLUSIVE ||
            requested_lock_mode == LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE;
   }
@@ -228,7 +227,6 @@ void CheckLockRow(Transaction *txn, LockManager::LockMode lock_mode, const table
         throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_LOCK_NOT_PRESENT);
       }
       break;
-      ;
     case LockManager::LockMode::SHARED:
       break;
     case LockManager::LockMode::INTENTION_EXCLUSIVE:
@@ -519,24 +517,6 @@ void LockManager::BuildGraph() {
   }
 }
 
-auto LockManager::DFS(txn_id_t txn_id) -> bool {
-  has_search_[txn_id] = true;
-  stk_.push_back(txn_id);
-  in_stk_[txn_id] = true;
-  for (auto next_txn_id : waits_for_[txn_id]) {
-    if (!has_search_[next_txn_id] && DFS(next_txn_id)) {
-      return true;
-    }
-    if (in_stk_[next_txn_id]) {
-      stk_.push_back(next_txn_id);
-      return true;
-    }
-  }
-  stk_.pop_back();
-  in_stk_[txn_id] = false;
-  return false;
-}
-
 void LockManager::PrintGraph() {
   if (waits_for_.empty()) {
     return;
@@ -591,22 +571,42 @@ void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) { waits_for_[t1].insert(t2);
 
 void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) { waits_for_[t1].erase(t2); }
 
-auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
-  for (const auto &[id, _] : waits_for_) {
-    if (!has_search_[id] && DFS(id)) {
-      auto it = std::find(stk_.begin(), stk_.end() - 1, stk_.back());
-      *txn_id = -1;
-      while (it != stk_.end()) {
-        *txn_id = std::max(*txn_id, *it);
-        ++it;
-      }
-      stk_.clear();
-      in_stk_.clear();
-      has_search_.clear();
+auto LockManager::DFS(txn_id_t txn_id) -> bool {
+  if (searched_set_.count(txn_id) > 0) {
+    return false;
+  }
+  if (cycle_set_.find(txn_id) != cycle_set_.end()) {
+    return true;
+  }
+  cycle_set_.emplace(txn_id);
+  auto &targets = waits_for_[txn_id];
+  for (const auto &target : targets) {
+    if (DFS(target)) {
       return true;
     }
-    stk_.clear();
-    in_stk_.clear();
+  }
+  searched_set_.emplace(txn_id);
+  cycle_set_.erase(txn_id);
+  return false;
+}
+
+auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
+  for (const auto &edge : waits_for_) {
+    txn_sort_list_.emplace_back(edge.first);
+  }
+
+  std::sort(txn_sort_list_.begin(), txn_sort_list_.end(),
+            [](const txn_id_t &t1, const txn_id_t &t2) { return t1 < t2; });
+  for (const auto &begin_txn : txn_sort_list_) {
+    cycle_set_.clear();
+    if (DFS(begin_txn)) {
+      auto youngest_txn = *cycle_set_.begin();
+      for (auto cycle_node : cycle_set_) {
+        youngest_txn = std::max(youngest_txn, cycle_node);
+      }
+      *txn_id = youngest_txn;
+      return true;
+    }
   }
   return false;
 }
@@ -629,9 +629,9 @@ void LockManager::RunCycleDetection() {
       waits_for_.clear();
       BuildGraph();
       while (true) {
-        stk_.clear();
-        in_stk_.clear();
-        has_search_.clear();
+        txn_sort_list_.clear();
+        searched_set_.clear();
+        cycle_set_.clear();
         txn_id_t tid;
         if (HasCycle(&tid)) {
           auto txn = txn_manager_->GetTransaction(tid);

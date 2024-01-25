@@ -352,9 +352,9 @@ class LockManager {
   std::mutex waits_for_latch_;
 
   // variable for construct wait graph
-  std::vector<txn_id_t> stk_;
-  std::unordered_map<txn_id_t, bool> in_stk_;
-  std::unordered_map<txn_id_t, bool> has_search_;
+  std::set<txn_id_t> searched_set_;
+  std::set<txn_id_t> cycle_set_;
+  std::vector<txn_id_t> txn_sort_list_;
 };
 
 }  // namespace bustub
